@@ -25,18 +25,18 @@ public class BillingManager {
     public RepairOrder createOrder(String orderId, String licensePlate) {
         Vehicle vehicle = vehicleRepo.findByLicensePlate(licensePlate);
         if (vehicle == null) {
-            System.out.println("❌ Xe chưa đăng ký trong gara!");
+            System.out.println("Xe chưa đăng ký trong gara!");
             return null;
         }
         RepairOrder order = new RepairOrder(orderId, vehicle);
         orders.add(order);
-        System.out.println("✅ Đã tạo phiếu dịch vụ " + orderId + " cho xe " + licensePlate);
+        System.out.println("Đã tạo phiếu dịch vụ " + orderId + " cho xe " + licensePlate);
         return order;
     }
 
     public Invoice generateInvoice(String invoiceId, RepairOrder order) {
         if (order == null || order.getServices().isEmpty()) {
-            System.out.println("❌ Phiếu dịch vụ rỗng, không thể xuất hóa đơn!");
+            System.out.println("Phiếu dịch vụ rỗng, không thể xuất hóa đơn!");
             return null;
         }
         Invoice invoice = new Invoice(invoiceId, order);

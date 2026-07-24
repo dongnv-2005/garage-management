@@ -73,13 +73,11 @@ public class ChangePasswordDialog extends JDialog {
         String currentUsername = AuthService.getCurrentUser().getUsername();
 
         try (Connection conn = DatabaseConfig.getConnection()) {
-            // 1. Kiểm tra mật khẩu cũ
             PreparedStatement checkStmt = conn.prepareStatement("SELECT password FROM users WHERE username = ?");
             checkStmt.setString(1, currentUsername);
             var rs = checkStmt.executeQuery();
 
             if (rs.next() && rs.getString("password").equals(oldPass)) {
-                // 2. Cập nhật mật khẩu mới
                 PreparedStatement updateStmt = conn.prepareStatement("UPDATE users SET password = ? WHERE username = ?");
                 updateStmt.setString(1, newPass);
                 updateStmt.setString(2, currentUsername);

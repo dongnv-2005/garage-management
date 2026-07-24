@@ -6,13 +6,11 @@ public class User {
     private String username;
     private String password;
     private String fullName;
-    private Role role; // ADMIN hoặc RECEPTIONIST
+    private Role role;
 
-    // Constructor không tham số (dùng khi cần)
     public User() {
     }
 
-    // Constructor đầy đủ tham số
     public User(String username, String password, String fullName, Role role) {
         this.username = username;
         this.password = password;
@@ -20,7 +18,6 @@ public class User {
         this.role = role;
     }
 
-    // Getters và Setters (Đảm bảo tính Đóng gói - Encapsulation)
     public String getUsername() {
         return username;
     }

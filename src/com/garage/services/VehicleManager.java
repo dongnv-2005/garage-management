@@ -19,17 +19,17 @@ public class VehicleManager {
     public boolean registerVehicle(String licensePlate, String brand, String model, String customerId) {
         Customer owner = customerRepo.findById(customerId);
         if (owner == null) {
-            System.out.println("❌ Khách hàng không tồn tại. Vui lòng tạo khách hàng trước!");
+            System.out.println("Khách hàng không tồn tại. Vui lòng tạo khách hàng trước!");
             return false;
         }
         if (vehicleRepo.existsByLicensePlate(licensePlate)) {
-            System.out.println("❌ Biển số xe này đã có trong hệ thống!");
+            System.out.println("Biển số xe này đã có trong hệ thống!");
             return false;
         }
         Vehicle vehicle = new Vehicle(licensePlate, brand, model, owner);
         vehicleRepo.save(vehicle);
         owner.addVehicle(vehicle);
-        System.out.println("✅ Đã tiếp nhận xe " + licensePlate + " cho khách hàng " + owner.getName());
+        System.out.println("Đã tiếp nhận xe " + licensePlate + " cho khách hàng " + owner.getName());
         return true;
     }
 
@@ -40,11 +40,11 @@ public class VehicleManager {
     public void updateVehicleStatus(String licensePlate, RepairStatus status) {
         Vehicle vehicle = vehicleRepo.findByLicensePlate(licensePlate);
         if (vehicle == null) {
-            System.out.println("❌ Không tìm thấy xe với biển số: " + licensePlate);
+            System.out.println("Không tìm thấy xe với biển số: " + licensePlate);
             return;
         }
         vehicle.setStatus(status);
-        System.out.println("✅ Đã cập nhật trạng thái xe " + licensePlate + " thành: " + status.getDescription());
+        System.out.println("Đã cập nhật trạng thái xe " + licensePlate + " thành: " + status.getDescription());
     }
 
     public List<Vehicle> getAllVehicles() {

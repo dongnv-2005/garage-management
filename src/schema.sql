@@ -20,7 +20,8 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS employees (
     id VARCHAR(20) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    phone VARCHAR(15),
+    phone VARCHAR(20) DEFAULT '---',
+    cccd VARCHAR(20) DEFAULT '---',
     role VARCHAR(50) NOT NULL,
     shift VARCHAR(50) NOT NULL
 );
@@ -72,6 +73,18 @@ CREATE TABLE IF NOT EXISTS attendance_logs (
     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
 );
 
+-- Bảng Lịch sử Xuất/Sử dụng Phụ tùng
+CREATE TABLE IF NOT EXISTS part_usage_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    part_id VARCHAR(20) NOT NULL,
+    part_name VARCHAR(100) NOT NULL,
+    quantity INT NOT NULL,
+    used_for_vehicle VARCHAR(20) NOT NULL,
+    created_by VARCHAR(50) NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (part_id) REFERENCES parts(id) ON DELETE CASCADE
+);
+
 -- =========================================================
 -- 3. BỘ DỮ LIỆU MẪU (SEED DATA)
 -- =========================================================
@@ -83,12 +96,13 @@ INSERT IGNORE INTO users (username, password, full_name, role) VALUES
 ('namlv', '123456', 'Lê Văn Nam', 'RECEPTIONIST');
 
 -- B. Danh sách Nhân viên & Ca làm việc (2 Ca: 06:00-14:00 và 14:00-22:00)
-INSERT IGNORE INTO employees (id, name, phone, role, shift) VALUES 
-('NV01', 'Trần Thị Hòa', '0912345678', 'Lễ Tân', 'Ca 1 (06:00 - 14:00)'),
-('NV02', 'Lê Văn Nam', '0988776655', 'Lễ Tân', 'Ca 2 (14:00 - 22:00)'),
-('NV03', 'Phạm Quốc Bảo', '0933445566', 'Kỹ Thuật Viên', 'Ca 1 (06:00 - 14:00)'),
-('NV04', 'Hoàng Minh Tuấn', '0977112233', 'Kỹ Thuật Viên', 'Ca 1 (06:00 - 14:00)'),
-('NV05', 'Đặng Văn Lâm', '0905554433', 'Kỹ Thuật Viên', 'Ca 2 (14:00 - 22:00)');
+INSERT IGNORE INTO employees (id, name, phone, cccd, role, shift) VALUES 
+('ADMIN', 'Chủ Garage', '---', '---', 'Chủ Garage', 'Toàn thời gian'),
+('NV01', 'Trần Thị Hòa', '0912345678','---', 'Lễ Tân', 'Ca 1 (06:00 - 14:00)'),
+('NV02', 'Lê Văn Nam', '0988776655', '---', 'Lễ Tân', 'Ca 2 (14:00 - 22:00)'),
+('NV03', 'Phạm Quốc Bảo', '0933445566', '---', 'Kỹ Thuật Viên', 'Ca 1 (06:00 - 14:00)'),
+('NV04', 'Hoàng Minh Tuấn', '0977112233', '---', 'Kỹ Thuật Viên', 'Ca 1 (06:00 - 14:00)'),
+('NV05', 'Đặng Văn Lâm', '0905554433', '---', 'Kỹ Thuật Viên', 'Ca 2 (14:00 - 22:00)');
 
 -- C. Danh sách Khách hàng mẫu
 INSERT IGNORE INTO customers (id, name, phone) VALUES 

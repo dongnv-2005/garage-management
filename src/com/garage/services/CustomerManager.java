@@ -2,41 +2,27 @@ package com.garage.services;
 
 import com.garage.models.Customer;
 import com.garage.repository.CustomerRepository;
+
+import java.sql.SQLException;
 import java.util.List;
 
 public class CustomerManager {
-    private final CustomerRepository customerRepo;
+    private final CustomerRepository repository = new CustomerRepository();
 
-    public CustomerManager(CustomerRepository customerRepo) {
-        this.customerRepo = customerRepo;
+    public List<Customer> getAllCustomers() {
+        return repository.findAll();
     }
 
-    public boolean registerCustomer(String id, String name, String phone) {
-        if (customerRepo.existsById(id)) {
-            System.out.println("Mã khách hàng đã tồn tại!");
-            return false;
-        }
-        Customer customer = new Customer(id, name, phone);
-        customerRepo.save(customer);
-        System.out.println("Đã thêm khách hàng thành công: " + name);
-        return true;
+    public List<Customer> searchCustomers(String keyword) {
+        return repository.search(keyword);
     }
 
-    public Customer findCustomer(String id) {
-        return customerRepo.findById(id);
+    public void addCustomer(String name, String phone) throws SQLException {
+        String id = repository.generateNextId();
+        repository.save(new Customer(id, name, phone));
     }
 
-    public List<Customer> findCustomerList() {
-        return customerRepo.findAll();
-    }
-
-    public void listCustomers() {
-        List<Customer> customers = customerRepo.findAll();
-        if (customers.isEmpty()) {
-            System.out.println("Chưa có khách hàng nào.");
-            return;
-        }
-        System.out.println("\n--- DANH SÁCH KHÁCH HÀNG ---");
-        customers.forEach(System.out::println);
+    public void updateCustomer(String id, String name, String phone) throws SQLException {
+        repository.update(new Customer(id, name, phone));
     }
 }

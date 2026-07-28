@@ -1,43 +1,54 @@
 package com.garage.models;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-
 public class Invoice {
-    private String invoiceId;
-    private RepairOrder order;
-    private LocalDateTime paymentDate;
+    private String id;
+    private String licensePlate;
+    private String customerName;
+    private String serviceName;
+    private String partInfo;
+    private String notes;
+    private String createdBy;
     private double totalAmount;
+    private String createdAt;
 
-    public Invoice(String invoiceId, RepairOrder order) {
-        this.invoiceId = invoiceId;
-        this.order = order;
-        this.paymentDate = LocalDateTime.now();
-        this.totalAmount = order.calculateTotalCost();
+    public Invoice() {}
+
+    public Invoice(String id, String licensePlate, String customerName, String serviceName, String partInfo, String notes, String createdBy, double totalAmount, String createdAt) {
+        this.id = id;
+        this.licensePlate = licensePlate;
+        this.customerName = customerName;
+        this.serviceName = serviceName;
+        this.partInfo = partInfo;
+        this.notes = notes;
+        this.createdBy = createdBy;
+        this.totalAmount = totalAmount;
+        this.createdAt = createdAt;
     }
 
-    public String getInvoiceId() { return invoiceId; }
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
+
+    public String getLicensePlate() { return licensePlate; }
+    public void setLicensePlate(String licensePlate) { this.licensePlate = licensePlate; }
+
+    public String getCustomerName() { return customerName; }
+    public void setCustomerName(String customerName) { this.customerName = customerName; }
+
+    public String getServiceName() { return serviceName; }
+    public void setServiceName(String serviceName) { this.serviceName = serviceName; }
+
+    public String getPartInfo() { return partInfo; }
+    public void setPartInfo(String partInfo) { this.partInfo = partInfo; }
+
+    public String getNotes() { return notes; }
+    public void setNotes(String notes) { this.notes = notes; }
+
+    public String getCreatedBy() { return createdBy; }
+    public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }
+
     public double getTotalAmount() { return totalAmount; }
-    public LocalDateTime getPaymentDate() { return paymentDate; }
-    public RepairOrder getOrder() { return order; }
+    public void setTotalAmount(double totalAmount) { this.totalAmount = totalAmount; }
 
-    public void printInvoice() {
-        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
-        System.out.println("\n==================================================");
-        System.out.println("            HÓA ĐƠN DỊCH VỤ GARA Ô TÔ            ");
-        System.out.println("==================================================");
-        System.out.println("Mã hóa đơn : " + invoiceId);
-        System.out.println("Ngày xuất  : " + paymentDate.format(dtf));
-        System.out.println("Khách hàng : " + order.getVehicle().getOwner().getName() + " | SĐT: " + order.getVehicle().getOwner().getPhone());
-        System.out.println("Xe         : " + order.getVehicle().getLicensePlate() + " (" + order.getVehicle().getBrand() + " " + order.getVehicle().getModel() + ")");
-        System.out.println("--------------------------------------------------");
-        System.out.println("Danh sách dịch vụ đã sử dụng:");
-        int idx = 1;
-        for (BaseService service : order.getServices()) {
-            System.out.printf("  %d. %-30s : %,12.0f VNĐ\n", idx++, service.getServiceName(), service.calculateCost());
-        }
-        System.out.println("--------------------------------------------------");
-        System.out.printf("TỔNG CHI PHÍ THANH TOÁN            : %,12.0f VNĐ\n", totalAmount);
-        System.out.println("==================================================\n");
-    }
+    public String getCreatedAt() { return createdAt; }
+    public void setCreatedAt(String createdAt) { this.createdAt = createdAt; }
 }

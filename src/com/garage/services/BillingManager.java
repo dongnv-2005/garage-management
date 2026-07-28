@@ -1,75 +1,69 @@
 package com.garage.services;
 
 import com.garage.enums.RepairStatus;
-import com.garage.models.BaseService;
 import com.garage.models.Invoice;
-import com.garage.models.RepairOrder;
-import com.garage.models.Vehicle;
+import com.garage.models.Part;
 import com.garage.repository.InvoiceRepository;
+import com.garage.repository.PartRepository;
 import com.garage.repository.VehicleRepository;
-import java.util.ArrayList;
-import java.util.HashMap;
+
+import java.sql.SQLException;
 import java.util.List;
-import java.util.Map;
 
 public class BillingManager {
-    private final InvoiceRepository invoiceRepo;
-    private final VehicleRepository vehicleRepo;
-    private final List<RepairOrder> orders = new ArrayList<>();
+    private final InvoiceRepository invoiceRepository = new InvoiceRepository();
+    private final PartRepository partRepository = new PartRepository();
+    private final VehicleRepository vehicleRepository = new VehicleRepository();
 
-    public BillingManager(InvoiceRepository invoiceRepo, VehicleRepository vehicleRepo) {
-        this.invoiceRepo = invoiceRepo;
-        this.vehicleRepo = vehicleRepo;
+    public List<Invoice> getAllInvoices() {
+        return invoiceRepository.findAll();
     }
 
-    public RepairOrder createOrder(String orderId, String licensePlate) {
-        Vehicle vehicle = vehicleRepo.findByLicensePlate(licensePlate);
-        if (vehicle == null) {
-            System.out.println("Xe chưa đăng ký trong gara!");
-            return null;
-        }
-        RepairOrder order = new RepairOrder(orderId, vehicle);
-        orders.add(order);
-        System.out.println("Đã tạo phiếu dịch vụ " + orderId + " cho xe " + licensePlate);
-        return order;
+    public List<Invoice> searchInvoices(String keyword) {
+        return invoiceRepository.search(keyword);
     }
 
-    public Invoice generateInvoice(String invoiceId, RepairOrder order) {
-        if (order == null || order.getServices().isEmpty()) {
-            System.out.println("Phiếu dịch vụ rỗng, không thể xuất hóa đơn!");
-            return null;
-        }
-        Invoice invoice = new Invoice(invoiceId, order);
-        invoiceRepo.save(invoice);
-        order.getVehicle().setStatus(RepairStatus.COMPLETED);
-        return invoice;
-    }
+    public void createInvoice(String licensePlate, String serviceType, String selectedPartRaw, int partQty, String notes, double totalAmount, String currentUsername) throws SQLException {
+        String invId = "INV-" + (System.currentTimeMillis() % 10000);
+        String partInfoStr = "---";
 
-    public void printReports() {
-        List<Vehicle> allVehicles = vehicleRepo.findAll();
-        List<Invoice> allInvoices = invoiceRepo.findAll();
-
-        System.out.println("\n==================================================");
-        System.out.println("             BÁO CÁO THỐNG KÊ GARA                ");
-        System.out.println("==================================================");
-        System.out.println("1. Tổng số xe đã tiếp nhận    : " + allVehicles.size() + " xe");
-        long completedVehicles = allVehicles.stream()
-                .filter(v -> v.getStatus() == RepairStatus.COMPLETED).count();
-        System.out.println("2. Số lượng xe đã sửa xong    : " + completedVehicles + " xe");
-
-        double totalRevenue = allInvoices.stream().mapToDouble(Invoice::getTotalAmount).sum();
-        System.out.printf("3. Tổng doanh thu hệ thống    : %,12.0f VNĐ\n", totalRevenue);
-
-        System.out.println("4. Thống kê dịch vụ được sử dụng:");
-        Map<String, Long> serviceCount = new HashMap<>();
-        for (RepairOrder order : orders) {
-            for (BaseService s : order.getServices()) {
-                serviceCount.put(s.getServiceName(), serviceCount.getOrDefault(s.getServiceName(), 0L) + 1);
+        if ("Thay thế phụ tùng kho".equals(serviceType)) {
+            if (selectedPartRaw != null && !selectedPartRaw.isEmpty()) {
+                String partId = selectedPartRaw.split(" - ")[0];
+                Part part = partRepository.findById(partId);
+                if (part != null) {
+                    if (part.getStockQuantity() < partQty) {
+                        throw new IllegalArgumentException("Số lượng tồn kho không đủ! Hiện còn: " + part.getStockQuantity());
+                    }
+                    partInfoStr = part.getName() + " (SL: " + partQty + ")";
+                    partRepository.reduceStock(partId, partQty);
+                    partRepository.logPartTransaction(partId, part.getName(), partQty, licensePlate, currentUsername);
+                }
             }
         }
-        serviceCount.forEach((name, count) ->
-                System.out.println("   - " + name + ": " + count + " lần")
-        );
-        System.out.println("==================================================\n");
+
+        Invoice invoice = new Invoice(invId, licensePlate, null, serviceType, partInfoStr, notes.isEmpty() ? "---" : notes, currentUsername, totalAmount, null);
+        invoiceRepository.save(invoice);
+        vehicleRepository.updateStatus(licensePlate, RepairStatus.COMPLETED);
+    }
+
+    public List<Part> getAllParts() {
+        return partRepository.findAll();
+    }
+
+    public List<Object[]> getPartUsageLogs() {
+        return partRepository.findUsageLogs();
+    }
+
+    public void importPart(String name, double importPrice, double exportPrice, int qty, String currentUsername) throws SQLException {
+        Part existing = partRepository.findByNameAndImportPrice(name, importPrice);
+        if (existing != null) {
+            partRepository.addStock(existing.getId(), qty, exportPrice);
+            partRepository.logPartTransaction(existing.getId(), name, qty, "NHẬP KHO", currentUsername);
+        } else {
+            String newId = partRepository.generateNextId();
+            partRepository.save(new Part(newId, name, importPrice, exportPrice, qty));
+            partRepository.logPartTransaction(newId, name, qty, "NHẬP KHO", currentUsername);
+        }
     }
 }

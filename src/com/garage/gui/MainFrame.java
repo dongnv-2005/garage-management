@@ -17,6 +17,7 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -29,6 +30,8 @@ public class MainFrame extends JFrame {
 
     private DefaultTableModel customerModel, vehicleModel, partModel, partUsageModel, employeeModel, attendanceModel, invoiceHistoryModel, reportModel;
     private JLabel lblTotalRevenue;
+    private JComboBox<Integer> cbReportMonth;
+    private JComboBox<Integer> cbReportYear;
 
     public MainFrame() {
         Role currentRole = AuthService.getCurrentUser().getRole();
@@ -53,7 +56,7 @@ public class MainFrame extends JFrame {
             tabbedPane.addTab("Quản lý Nhân sự & Chấm công", createEmployeePanel());
             tabbedPane.addTab("Báo cáo Doanh thu & Thống kê", createReportPanel());
         } else {
-            tabbedPane.addTab("Chấm Công Nhóm", createReceptionistAttendancePanel());
+            tabbedPane.addTab("Lịch Sử Chấm Công Nhóm", createReceptionistAttendancePanel());
         }
 
         int totalTabs = tabbedPane.getTabCount();
@@ -84,8 +87,8 @@ public class MainFrame extends JFrame {
                     LocalDateTime now = LocalDateTime.now();
                     String dateStr = now.format(DateTimeFormatter.ofPattern("dd-MM-yyyy"));
                     String timeStr = now.format(DateTimeFormatter.ofPattern("HH:mm"));
-                    
-                    JOptionPane.showMessageDialog(this, 
+
+                    JOptionPane.showMessageDialog(this,
                             "CHẤM CÔNG THÀNH CÔNG!\n" +
                             "Nhân viên: " + currentFullName + "\n" +
                             "Ngày: " + dateStr + "\n" +
@@ -239,20 +242,25 @@ public class MainFrame extends JFrame {
         JPanel panel = new JPanel(new BorderLayout(10, 10));
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-        JPanel form = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
-        form.setBorder(BorderFactory.createTitledBorder("Tiếp Nhận Xe Về Gara"));
+        JPanel topBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
+        topBar.setBorder(BorderFactory.createTitledBorder("Thao Tác Quản Lý Xe"));
+
+        JTextField txtSearchVeh = new JTextField(10);
+        JButton btnSearchVeh = createCustomButton("Tìm Kiếm", new Color(52, 152, 219));
+        JButton btnReloadVeh = createCustomButton("Làm Mới", new Color(142, 68, 173));
 
         JTextField txtPlate = new JTextField(8);
-        JTextField txtBrand = new JTextField(10);
-        JTextField txtModel = new JTextField(10);
-        JTextField txtOwnerId = new JTextField(8);
+        JTextField txtBrand = new JTextField(8);
+        JTextField txtModel = new JTextField(8);
+        JTextField txtOwnerId = new JTextField(6);
         JButton btnAddVeh = createCustomButton("Tiếp Nhận Xe", new Color(26, 188, 156));
 
-        form.add(new JLabel("Biển số:")); form.add(txtPlate);
-        form.add(new JLabel("Hãng xe:")); form.add(txtBrand);
-        form.add(new JLabel("Model:")); form.add(txtModel);
-        form.add(new JLabel("Mã KH:")); form.add(txtOwnerId);
-        form.add(btnAddVeh);
+        topBar.add(new JLabel("Tìm Xe:")); topBar.add(txtSearchVeh); topBar.add(btnSearchVeh); topBar.add(btnReloadVeh);
+        topBar.add(new JLabel(" | Biển số:")); topBar.add(txtPlate);
+        topBar.add(new JLabel("Hãng:")); topBar.add(txtBrand);
+        topBar.add(new JLabel("Model:")); topBar.add(txtModel);
+        topBar.add(new JLabel("Mã KH:")); topBar.add(txtOwnerId);
+        topBar.add(btnAddVeh);
 
         vehicleModel = new DefaultTableModel(new String[] { "Biển số", "Hãng xe", "Model", "Mã Chủ Xe", "Tên Chủ Xe", "Trạng thái" }, 0);
         JTable table = new JTable(vehicleModel);
@@ -264,6 +272,21 @@ public class MainFrame extends JFrame {
         statusPanel.add(new JLabel("Trạng thái mới:"));
         statusPanel.add(cbStatus);
         statusPanel.add(btnUpdateStatus);
+
+        btnSearchVeh.addActionListener(e -> {
+            String kw = txtSearchVeh.getText().trim();
+            if (kw.isEmpty()) { loadVehicles(); return; }
+            vehicleModel.setRowCount(0);
+            for (Vehicle v : vehicleManager.searchVehicles(kw)) {
+                vehicleModel.addRow(new Object[]{ v.getLicensePlate(), v.getBrand(), v.getModel(), v.getOwnerId(), v.getOwnerName(), v.getStatus().getDescription() });
+            }
+        });
+
+        btnReloadVeh.addActionListener(e -> {
+            txtSearchVeh.setText("");
+            txtPlate.setText(""); txtBrand.setText(""); txtModel.setText(""); txtOwnerId.setText("");
+            loadVehicles();
+        });
 
         btnAddVeh.addActionListener(e -> {
             String plate = txtPlate.getText().trim().toUpperCase();
@@ -298,7 +321,7 @@ public class MainFrame extends JFrame {
             }
         });
 
-        panel.add(form, BorderLayout.NORTH);
+        panel.add(topBar, BorderLayout.NORTH);
         panel.add(new JScrollPane(table), BorderLayout.CENTER);
         panel.add(statusPanel, BorderLayout.SOUTH);
         return panel;
@@ -438,16 +461,18 @@ public class MainFrame extends JFrame {
         line1.add(btnInvoice);
 
         JPanel line2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
-        line2.setBorder(BorderFactory.createTitledBorder("2. Tìm Kiếm Lịch Sử Hóa Đơn"));
+        line2.setBorder(BorderFactory.createTitledBorder("2. Tìm Kiếm & Quản Lý Lịch Sử Hóa Đơn"));
 
         JTextField txtSearchInvoice = new JTextField(15);
-        JButton btnSearchInv = createCustomButton("Tìm Hoá đơn (Biển số/ Tên KH)", new Color(142, 68, 173));
-        JButton btnReloadInv = createCustomButton("Tải Lại", new Color(46, 204, 113));
+        JButton btnSearchInv = createCustomButton("Tìm Theo Biển Số / Tên Người Tạo", new Color(142, 68, 173));
+        JButton btnReloadInv = createCustomButton("Tải Lại Lịch Sử", new Color(46, 204, 113));
+        JButton btnDeleteInv = createCustomButton("Xóa Hóa Đơn Chọn", new Color(231, 76, 60));
 
         line2.add(new JLabel("Từ khóa tìm kiếm:"));
         line2.add(txtSearchInvoice);
         line2.add(btnSearchInv);
         line2.add(btnReloadInv);
+        line2.add(btnDeleteInv);
 
         topForm.add(line1);
         topForm.add(line2);
@@ -551,6 +576,28 @@ public class MainFrame extends JFrame {
             reloadPlateCombo.run();
         });
 
+        btnDeleteInv.addActionListener(e -> {
+            int selectedRow = historyTable.getSelectedRow();
+            if (selectedRow == -1) {
+                JOptionPane.showMessageDialog(this, "Vui lòng chọn 1 hóa đơn cần xóa!");
+                return;
+            }
+            String invId = (String) invoiceHistoryModel.getValueAt(selectedRow, 0);
+            int confirm = JOptionPane.showConfirmDialog(this, "Bạn có chắc chắn muốn xóa hóa đơn " + invId + "? (Số lượng phụ tùng sẽ tự động hoàn lại vào kho)", "Xác nhận xóa", JOptionPane.YES_NO_OPTION);
+            if (confirm == JOptionPane.YES_OPTION) {
+                try {
+                    billingManager.deleteInvoice(invId);
+                    JOptionPane.showMessageDialog(this, "Xóa hóa đơn thành công và đã hoàn kho phụ tùng!");
+                    loadInvoiceHistory();
+                    loadParts();
+                    loadPartUsageLogs();
+                    loadReportData();
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(this, "Lỗi xóa hóa đơn: " + ex.getMessage());
+                }
+            }
+        });
+
         panel.add(topForm, BorderLayout.NORTH);
         panel.add(new JScrollPane(historyTable), BorderLayout.CENTER);
 
@@ -575,44 +622,74 @@ public class MainFrame extends JFrame {
 
         JPanel topForm = new JPanel(new GridLayout(2, 1, 5, 5));
 
-        JPanel formAdd = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
-        formAdd.setBorder(BorderFactory.createTitledBorder("1. Thêm Nhân Viên Mới"));
-        JTextField txtName = new JTextField(10);
+        JPanel formAdd = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
+        formAdd.setBorder(BorderFactory.createTitledBorder("1. Thông Tin & Thao Tác Nhân Viên"));
+        JTextField txtName = new JTextField(8);
         JTextField txtPhone = new JTextField(8);
-        JTextField txtCccd = new JTextField(10);
+        JTextField txtCccd = new JTextField(8);
+        JTextField txtNotes = new JTextField(10);
         JComboBox<String> cbRole = new JComboBox<>(new String[] { "Lễ Tân", "Kỹ Thuật Viên" });
         JComboBox<String> cbShift = new JComboBox<>(new String[] { "Ca 1 (06:00 - 14:00)", "Ca 2 (14:00 - 22:00)" });
-        JButton btnAddEmp = createCustomButton("Thêm Nhân Viên", new Color(155, 89, 182));
+
+        JButton btnAddEmp = createCustomButton("Thêm NV", new Color(155, 89, 182));
+        JButton btnUpdateEmp = createCustomButton("Cập Nhật NV", new Color(230, 126, 34));
+        JButton btnDeleteEmp = createCustomButton("Xóa NV", new Color(231, 76, 60));
 
         formAdd.add(new JLabel("Tên:")); formAdd.add(txtName);
         formAdd.add(new JLabel("SĐT:")); formAdd.add(txtPhone);
         formAdd.add(new JLabel("CCCD:")); formAdd.add(txtCccd);
         formAdd.add(new JLabel("Chức danh:")); formAdd.add(cbRole);
         formAdd.add(new JLabel("Ca làm:")); formAdd.add(cbShift);
+        formAdd.add(new JLabel("Ghi chú:")); formAdd.add(txtNotes);
         formAdd.add(btnAddEmp);
+        formAdd.add(btnUpdateEmp);
+        formAdd.add(btnDeleteEmp);
 
-        JPanel formAction = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
-        formAction.setBorder(BorderFactory.createTitledBorder("2. Quản Lý & Chấm Công Hộ"));
-        JTextField txtCheckinEmpId = new JTextField(8);
-        JButton btnCheckinBackup = createCustomButton("Tích Chấm Công Hộ", new Color(230, 126, 34));
-        JButton btnResetPassword = createCustomButton("Reset Mật Khẩu (123456)", new Color(231, 76, 60));
+        JPanel formAction = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
+        formAction.setBorder(BorderFactory.createTitledBorder("2. Điểm Danh Hộ & Lịch Sử Chấm Công"));
 
-        formAction.add(new JLabel("Nhập Mã NV / Tên NV:"));
-        formAction.add(txtCheckinEmpId);
-        formAction.add(btnCheckinBackup);
+        JComboBox<String> cbAllEmpSelect = new JComboBox<>();
+        JButton btnAdminCheckin = createCustomButton("Điểm Danh Hộ Nhân Viên", new Color(46, 204, 113));
+        JButton btnResetPassword = createCustomButton("Reset Mật Khẩu (123456)", new Color(52, 152, 219));
+        JButton btnDeleteAttendance = createCustomButton("Xóa Lịch Sử Chấm Công Chọn", new Color(192, 57, 43));
+
+        formAction.add(new JLabel("Chọn Nhân Viên:"));
+        formAction.add(cbAllEmpSelect);
+        formAction.add(btnAdminCheckin);
         formAction.add(btnResetPassword);
+        formAction.add(btnDeleteAttendance);
 
         topForm.add(formAdd);
         topForm.add(formAction);
 
-        employeeModel = new DefaultTableModel(new String[] { "Mã NV", "Họ & Tên", "SĐT", "CCCD", "Chức Danh", "Ca Phân Công", "Số Ca Làm", "Tổng Lương Tích Lũy" }, 0);
+        employeeModel = new DefaultTableModel(new String[] { "Mã NV", "Họ & Tên", "SĐT", "CCCD", "Chức Danh", "Ca Phân Công", "Số Ca Làm", "Tổng Lương Tích Lũy", "Ghi Chú" }, 0);
         JTable empTable = new JTable(employeeModel);
 
-        attendanceModel = new DefaultTableModel(new String[] { "STT", "Mã NV", "Họ & Tên", "Thời Gian Chấm Công", "Ca Làm" }, 0);
+        attendanceModel = new DefaultTableModel(new String[] { "Mã Log", "Mã NV", "Họ & Tên", "Thời Gian Chấm Công", "Ca Làm" }, 0);
         JTable attTable = new JTable(attendanceModel);
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, new JScrollPane(empTable), new JScrollPane(attTable));
         splitPane.setResizeWeight(0.55);
+
+        Runnable reloadEmpCombo = () -> {
+            cbAllEmpSelect.removeAllItems();
+            for (Employee emp : employeeRepository.findAll()) {
+                cbAllEmpSelect.addItem(emp.getId() + " - " + emp.getName() + " (" + emp.getRole() + ")");
+            }
+        };
+        reloadEmpCombo.run();
+
+        empTable.getSelectionModel().addListSelectionListener(e -> {
+            int row = empTable.getSelectedRow();
+            if (row != -1) {
+                txtName.setText((String) employeeModel.getValueAt(row, 1));
+                txtPhone.setText((String) employeeModel.getValueAt(row, 2));
+                txtCccd.setText((String) employeeModel.getValueAt(row, 3));
+                cbRole.setSelectedItem((String) employeeModel.getValueAt(row, 4));
+                cbShift.setSelectedItem((String) employeeModel.getValueAt(row, 5));
+                txtNotes.setText((String) employeeModel.getValueAt(row, 8));
+            }
+        });
 
         btnAddEmp.addActionListener(e -> {
             String name = txtName.getText().trim();
@@ -620,55 +697,110 @@ public class MainFrame extends JFrame {
             try {
                 String newId = employeeRepository.generateNextId();
                 Employee emp = new Employee(newId, name, txtPhone.getText().trim(), txtCccd.getText().trim(), (String) cbRole.getSelectedItem(), (String) cbShift.getSelectedItem(), 0, 0);
+                emp.setNotes(txtNotes.getText().trim());
                 employeeRepository.save(emp);
                 JOptionPane.showMessageDialog(this, "Thêm nhân viên thành công!");
-                txtName.setText(""); txtPhone.setText(""); txtCccd.setText("");
+                txtName.setText(""); txtPhone.setText(""); txtCccd.setText(""); txtNotes.setText("");
                 loadEmployees();
+                reloadEmpCombo.run();
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(this, "Lỗi: " + ex.getMessage());
             }
         });
 
-        btnCheckinBackup.addActionListener(e -> {
-            String input = txtCheckinEmpId.getText().trim();
-            if (input.isEmpty()) { JOptionPane.showMessageDialog(this, "Vui lòng nhập mã/tên!"); return; }
+        btnUpdateEmp.addActionListener(e -> {
+            int row = empTable.getSelectedRow();
+            if (row == -1) { JOptionPane.showMessageDialog(this, "Vui lòng chọn 1 nhân viên trong bảng!"); return; }
+            String empId = (String) employeeModel.getValueAt(row, 0);
             try {
-                if (employeeRepository.addAttendance(input, AuthService.getCurrentUser().getFullName())) {
+                Employee emp = new Employee(empId, txtName.getText().trim(), txtPhone.getText().trim(), txtCccd.getText().trim(), (String) cbRole.getSelectedItem(), (String) cbShift.getSelectedItem(), 0, 0);
+                emp.setNotes(txtNotes.getText().trim());
+                employeeRepository.update(emp);
+                JOptionPane.showMessageDialog(this, "Cập nhật nhân viên thành công!");
+                loadEmployees();
+                reloadEmpCombo.run();
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Lỗi cập nhật: " + ex.getMessage());
+            }
+        });
+
+        btnDeleteEmp.addActionListener(e -> {
+            int row = empTable.getSelectedRow();
+            if (row == -1) { JOptionPane.showMessageDialog(this, "Vui lòng chọn 1 nhân viên!"); return; }
+            String empId = (String) employeeModel.getValueAt(row, 0);
+            if ("ADMIN".equalsIgnoreCase(empId)) {
+                JOptionPane.showMessageDialog(this, "Không thể xóa tài khoản Chủ Garage!");
+                return;
+            }
+            int confirm = JOptionPane.showConfirmDialog(this, "Bạn có chắc muốn xóa nhân viên " + empId + "?", "Xác nhận xóa", JOptionPane.YES_NO_OPTION);
+            if (confirm == JOptionPane.YES_OPTION) {
+                try {
+                    employeeRepository.delete(empId);
+                    JOptionPane.showMessageDialog(this, "Đã xóa nhân viên!");
+                    loadEmployees();
+                    reloadEmpCombo.run();
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(this, "Lỗi xóa: " + ex.getMessage());
+                }
+            }
+        });
+
+        btnAdminCheckin.addActionListener(e -> {
+            String selectedItem = (String) cbAllEmpSelect.getSelectedItem();
+            if (selectedItem == null || selectedItem.isEmpty()) return;
+            String targetEmpId = selectedItem.split(" - ")[0];
+            String targetEmpName = selectedItem.split(" - ")[1].split(" \\(")[0];
+            try {
+                if (employeeRepository.addAttendance(targetEmpId, targetEmpName)) {
                     LocalDateTime now = LocalDateTime.now();
                     String dateStr = now.format(DateTimeFormatter.ofPattern("dd-MM-yyyy"));
                     String timeStr = now.format(DateTimeFormatter.ofPattern("HH:mm"));
-                    
+
                     JOptionPane.showMessageDialog(this, 
                             "TÍCH CHẤM CÔNG HỘ THÀNH CÔNG!\n" +
-                            "Người thực hiện: " + AuthService.getCurrentUser().getFullName() + "\n" +
+                            "Nhân viên: " + targetEmpName + "\n" +
                             "Ngày: " + dateStr + "\n" +
                             "Giờ: " + timeStr);
-                    txtCheckinEmpId.setText("");
                     loadAttendanceLogs();
                     loadEmployees();
-                } else {
-                    JOptionPane.showMessageDialog(this, "Không tìm thấy nhân viên!");
                 }
             } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, "Lỗi: " + ex.getMessage());
+                JOptionPane.showMessageDialog(this, "Lỗi chấm công: " + ex.getMessage());
             }
         });
 
         btnResetPassword.addActionListener(e -> {
-            int selectedRow = empTable.getSelectedRow();
-            String input = txtCheckinEmpId.getText().trim();
-            if (selectedRow != -1) {
-                input = (String) employeeModel.getValueAt(selectedRow, 0);
-            }
-            if (input.isEmpty()) { JOptionPane.showMessageDialog(this, "Vui lòng chọn nhân viên!"); return; }
+            String selectedItem = (String) cbAllEmpSelect.getSelectedItem();
+            if (selectedItem == null || selectedItem.isEmpty()) return;
+            String targetEmpId = selectedItem.split(" - ")[0];
             try {
-                if (employeeRepository.resetPassword(input)) {
+                if (employeeRepository.resetPassword(targetEmpId)) {
                     JOptionPane.showMessageDialog(this, "Đã reset mật khẩu về 123456!");
                 } else {
-                    JOptionPane.showMessageDialog(this, "Không tìm thấy tài khoản!");
+                    JOptionPane.showMessageDialog(this, "Không tìm thấy tài khoản đăng nhập tương ứng!");
                 }
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(this, "Lỗi: " + ex.getMessage());
+            }
+        });
+
+        btnDeleteAttendance.addActionListener(e -> {
+            int row = attTable.getSelectedRow();
+            if (row == -1) {
+                JOptionPane.showMessageDialog(this, "Vui lòng chọn 1 dòng lịch sử chấm công cần xóa!");
+                return;
+            }
+            int logId = (int) attendanceModel.getValueAt(row, 0);
+            int confirm = JOptionPane.showConfirmDialog(this, "Bạn có chắc muốn xóa bản ghi chấm công mã " + logId + "?", "Xác nhận xóa", JOptionPane.YES_NO_OPTION);
+            if (confirm == JOptionPane.YES_OPTION) {
+                try {
+                    employeeRepository.deleteAttendanceLog(logId);
+                    JOptionPane.showMessageDialog(this, "Đã xóa bản ghi chấm công!");
+                    loadAttendanceLogs();
+                    loadEmployees();
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(this, "Lỗi xóa: " + ex.getMessage());
+                }
             }
         });
 
@@ -684,7 +816,8 @@ public class MainFrame extends JFrame {
             employeeModel.addRow(new Object[]{
                     emp.getId(), emp.getName(), emp.getPhone(), emp.getCccd(), emp.getRole(), emp.getShift(),
                     "ADMIN".equals(emp.getId()) ? "---" : emp.getShiftCount() + " ca",
-                    "ADMIN".equals(emp.getId()) ? "---" : String.format("%,.0f VNĐ", emp.getTotalSalary())
+                    "ADMIN".equals(emp.getId()) ? "---" : String.format("%,.0f VNĐ", emp.getTotalSalary()),
+                    emp.getNotes()
             });
         }
     }
@@ -707,11 +840,11 @@ public class MainFrame extends JFrame {
         JPanel topBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
         topBar.setBorder(BorderFactory.createTitledBorder("Điểm Danh / Chấm Công Hộ Kỹ Thuật Viên Làm Cùng Ca"));
 
-        JTextField txtKtvName = new JTextField(12);
+        JComboBox<String> cbKtvSelect = new JComboBox<>();
         JButton btnCheckinKtv = createCustomButton("Điểm Danh KTV", new Color(46, 204, 113));
 
-        topBar.add(new JLabel("Mã / Tên KTV cần chấm công:"));
-        topBar.add(txtKtvName);
+        topBar.add(new JLabel("Chọn KTV Cùng Ca:"));
+        topBar.add(cbKtvSelect);
         topBar.add(btnCheckinKtv);
 
         DefaultTableModel groupKtvModel = new DefaultTableModel(new String[] { "STT", "Mã NV", "Họ & Tên KTV", "Chức Danh", "Ca Phân Công", "Lần Chấm Công Gần Nhất" }, 0);
@@ -720,42 +853,68 @@ public class MainFrame extends JFrame {
         DefaultTableModel groupAttHistoryModel = new DefaultTableModel(new String[] { "STT", "Mã KTV", "Họ & Tên KTV", "Thời Gian Chấm Công", "Ca Làm" }, 0);
         JTable historyTable = new JTable(groupAttHistoryModel);
 
-        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, new JScrollPane(ktvTable), new JScrollPane(historyTable));
-        splitPane.setResizeWeight(0.5);
+        DefaultTableModel selfAttHistoryModel = new DefaultTableModel(new String[] { "STT", "Mã NV", "Họ & Tên Lễ Tân", "Thời Gian Chấm Công", "Ca Làm" }, 0);
+        JTable selfHistoryTable = new JTable(selfAttHistoryModel);
+
+        JSplitPane splitKtvPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, new JScrollPane(ktvTable), new JScrollPane(historyTable));
+        splitKtvPane.setResizeWeight(0.5);
+
+        JTabbedPane attendanceSubTabs = new JTabbedPane();
+        attendanceSubTabs.addTab("Chấm Công Nhóm KTV", splitKtvPane);
+        attendanceSubTabs.addTab("Lịch Sử Tự Chấm Công Của Bạn", new JScrollPane(selfHistoryTable));
 
         Runnable loadGroupData = () -> {
             groupKtvModel.setRowCount(0);
             groupAttHistoryModel.setRowCount(0);
+            selfAttHistoryModel.setRowCount(0);
+            cbKtvSelect.removeAllItems();
+
             String myShift = employeeRepository.getEmployeeShift(AuthService.getCurrentUser().getUsername(), AuthService.getCurrentUser().getFullName());
             
-            for (Object[] row : employeeRepository.findGroupKtvByShift(myShift)) {
+            List<Object[]> ktvList = employeeRepository.findGroupKtvByShift(myShift);
+            for (Object[] row : ktvList) {
                 groupKtvModel.addRow(row);
+                cbKtvSelect.addItem(row[1] + " - " + row[2]);
             }
 
             for (Object[] row : employeeRepository.findKtvAttendanceHistoryByShift(myShift)) {
                 groupAttHistoryModel.addRow(row);
             }
+
+            for (Object[] row : employeeRepository.findSelfAttendanceLogs(AuthService.getCurrentUser().getUsername(), AuthService.getCurrentUser().getFullName())) {
+                selfAttHistoryModel.addRow(row);
+            }
         };
 
         btnCheckinKtv.addActionListener(e -> {
-            String input = txtKtvName.getText().trim();
-            if (input.isEmpty()) {
+            String selected = (String) cbKtvSelect.getSelectedItem();
+            if (selected == null || selected.isEmpty()) {
                 int row = ktvTable.getSelectedRow();
-                if (row != -1) input = (String) groupKtvModel.getValueAt(row, 1);
+                if (row != -1) {
+                    selected = groupKtvModel.getValueAt(row, 1) + " - " + groupKtvModel.getValueAt(row, 2);
+                }
             }
-            if (input == null || input.isEmpty()) { JOptionPane.showMessageDialog(this, "Vui lòng chọn hoặc nhập tên KTV!"); return; }
+
+            if (selected == null || selected.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Vui lòng chọn KTV trong bảng hoặc danh sách!");
+                return;
+            }
+
+            String targetKtvId = selected.split(" - ")[0];
+            String targetKtvName = selected.split(" - ")[1];
+
             try {
-                if (employeeRepository.addAttendance(input, AuthService.getCurrentUser().getFullName())) {
+                if (employeeRepository.addAttendance(targetKtvId, targetKtvName)) {
                     LocalDateTime now = LocalDateTime.now();
                     String dateStr = now.format(DateTimeFormatter.ofPattern("dd-MM-yyyy"));
                     String timeStr = now.format(DateTimeFormatter.ofPattern("HH:mm"));
 
                     JOptionPane.showMessageDialog(this, 
                             "ĐIỂM DANH KTV THÀNH CÔNG!\n" +
+                            "Kỹ Thuật Viên: " + targetKtvName + "\n" +
                             "Người thực hiện: " + AuthService.getCurrentUser().getFullName() + "\n" +
                             "Ngày: " + dateStr + "\n" +
                             "Giờ: " + timeStr);
-                    txtKtvName.setText("");
                     loadGroupData.run();
                 } else {
                     JOptionPane.showMessageDialog(this, "Không tìm thấy KTV!");
@@ -766,22 +925,40 @@ public class MainFrame extends JFrame {
         });
 
         panel.add(topBar, BorderLayout.NORTH);
-        panel.add(splitPane, BorderLayout.CENTER);
+        panel.add(attendanceSubTabs, BorderLayout.CENTER);
 
         loadGroupData.run();
         return panel;
     }
 
-    // =========================================================
-    // 8. TAB BÁO CÁO DOANH THU & THỐNG KÊ
+// =========================================================
+    // 8. TAB BÁO CÁO DOANH THU & THỐNG KÊ (TỐI ƯU THEO THÁNG / NĂM)
     // =========================================================
     private JPanel createReportPanel() {
         JPanel panel = new JPanel(new BorderLayout(10, 10));
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-        JPanel topBar = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        JButton btnRefresh = createCustomButton("Cập Nhật Báo Cáo Doanh Thu", new Color(142, 68, 173));
-        topBar.add(btnRefresh);
+        JPanel topBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
+        topBar.setBorder(BorderFactory.createTitledBorder("Bộ Lọc Thống Kê Theo Thời Gian"));
+
+        cbReportMonth = new JComboBox<>();
+        for (int m = 1; m <= 12; m++) cbReportMonth.addItem(m);
+        cbReportMonth.setSelectedItem(LocalDate.now().getMonthValue());
+
+        cbReportYear = new JComboBox<>();
+        int currentYear = LocalDate.now().getYear();
+        for (int y = currentYear - 5; y <= currentYear; y++) {
+            cbReportYear.addItem(y);
+        }
+        cbReportYear.setSelectedItem(currentYear);
+
+        JButton btnFilter = createCustomButton("Xem Thống Kê", new Color(142, 68, 173));
+
+        topBar.add(new JLabel("Tháng:"));
+        topBar.add(cbReportMonth);
+        topBar.add(new JLabel("Năm:"));
+        topBar.add(cbReportYear);
+        topBar.add(btnFilter);
 
         reportModel = new DefaultTableModel(new String[] { "Hạng Mục Thống Kê", "Số Lượng / Giá Trị", "Ghi Chú" }, 0) {
             @Override
@@ -789,7 +966,7 @@ public class MainFrame extends JFrame {
         };
 
         JTable reportTable = new JTable(reportModel);
-        reportTable.setRowHeight(32);
+        reportTable.setRowHeight(35);
         reportTable.setFont(new Font("SansSerif", Font.PLAIN, 13));
         reportTable.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 13));
 
@@ -801,12 +978,12 @@ public class MainFrame extends JFrame {
         bottomPanel.setBackground(new Color(236, 240, 241));
         bottomPanel.setBorder(BorderFactory.createEmptyBorder(8, 15, 8, 15));
 
-        lblTotalRevenue = new JLabel("TỔNG DOANH THU TOÀN HỆ THỐNG: 0 VNĐ");
+        lblTotalRevenue = new JLabel("TỔNG DOANH THU THÁNG 0/0: 0 VNĐ");
         lblTotalRevenue.setFont(new Font("SansSerif", Font.BOLD, 16));
         lblTotalRevenue.setForeground(new Color(192, 57, 43));
         bottomPanel.add(lblTotalRevenue);
 
-        btnRefresh.addActionListener(e -> loadReportData());
+        btnFilter.addActionListener(e -> loadReportData());
 
         panel.add(topBar, BorderLayout.NORTH);
         panel.add(new JScrollPane(reportTable), BorderLayout.CENTER);
@@ -819,23 +996,56 @@ public class MainFrame extends JFrame {
         if (reportModel == null) return;
         reportModel.setRowCount(0);
 
-        List<Vehicle> vehicles = vehicleManager.getAllVehicles();
-        int totalVeh = vehicles.size();
-        int doneVeh = (int) vehicles.stream().filter(v -> v.getStatus() == RepairStatus.COMPLETED).count();
-        int inProgressVeh = totalVeh - doneVeh;
+        int selectedMonth = (int) cbReportMonth.getSelectedItem();
+        int selectedYear = (int) cbReportYear.getSelectedItem();
 
-        List<Part> parts = billingManager.getAllParts();
-        int totalParts = parts.stream().mapToInt(Part::getStockQuantity).sum();
+        List<Invoice> allInvoices = billingManager.getAllInvoices();
+        List<Vehicle> allVehicles = vehicleManager.getAllVehicles();
 
-        List<Invoice> invoices = billingManager.getAllInvoices();
-        double totalRev = invoices.stream().mapToDouble(Invoice::getTotalAmount).sum();
+        double monthlyRevenue = 0;
+        double totalSystemRevenue = 0;
+        int doneVehCountInMonth = 0;
 
-        reportModel.addRow(new Object[] { "Tổng số xe tiếp nhận", totalVeh + " xe", "Toàn bộ xe đã đưa vào gara" });
-        reportModel.addRow(new Object[] { "Số xe đã sửa xong", doneVeh + " xe", "Đã hoàn thành & đủ điều kiện xuất HĐ" });
-        reportModel.addRow(new Object[] { "Số xe đang sửa / chờ xử lý", inProgressVeh + " xe", "Cần tiếp tục theo dõi tiến độ" });
-        reportModel.addRow(new Object[] { "Tổng số phụ tùng tồn kho", totalParts + " món", "Số lượng linh kiện sẵn có trong kho" });
-        reportModel.addRow(new Object[] { "Tổng số hóa đơn đã xuất", invoices.size() + " hóa đơn", "Tất cả giao dịch đã thanh toán" });
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-        lblTotalRevenue.setText(String.format("TỔNG DOANH THU TOÀN HỆ THỐNG: %,.0f VNĐ", totalRev));
+        for (Invoice inv : allInvoices) {
+            totalSystemRevenue += inv.getTotalAmount(); 
+
+            if (inv.getCreatedAt() != null) {
+                try {
+                    LocalDateTime dt = LocalDateTime.parse(inv.getCreatedAt(), formatter);
+                    if (dt.getMonthValue() == selectedMonth && dt.getYear() == selectedYear) {
+                        monthlyRevenue += inv.getTotalAmount();
+                        doneVehCountInMonth++;
+                    }
+                } catch (Exception e) {
+                    try {
+                        String dateOnly = inv.getCreatedAt().split(" ")[0];
+                        String[] parts = dateOnly.split("-");
+                        int y = Integer.parseInt(parts[0]);
+                        int m = Integer.parseInt(parts[1]);
+                        if (m == selectedMonth && y == selectedYear) {
+                            monthlyRevenue += inv.getTotalAmount();
+                            doneVehCountInMonth++;
+                        }
+                    } catch (Exception ex) {
+
+                    }
+                }
+            }
+        }
+
+        int inProgressVehCount = (int) allVehicles.stream().filter(v -> v.getStatus() != RepairStatus.COMPLETED).count();
+
+        int totalVehInMonth = doneVehCountInMonth + (selectedMonth == LocalDate.now().getMonthValue() && selectedYear == LocalDate.now().getYear() ? inProgressVehCount : 0);
+
+        String timeTitle = "Tháng " + selectedMonth + "/" + selectedYear;
+
+        reportModel.addRow(new Object[] { "Tổng số xe tiếp nhận (" + timeTitle + ")", totalVehInMonth + " xe", "Bao gồm xe đã xuất HĐ trong tháng và xe đang xử lý" });
+        reportModel.addRow(new Object[] { "Số xe đã hoàn thành (" + timeTitle + ")", doneVehCountInMonth + " xe", "Đã hoàn thành sửa chữa & xuất hóa đơn" });
+        reportModel.addRow(new Object[] { "Số xe đang sửa / chờ xử lý hiện tại", inProgressVehCount + " xe", "Cần tiếp tục theo dõi tiến độ thi công" });
+        reportModel.addRow(new Object[] { "Doanh thu " + timeTitle, String.format("%,.0f VNĐ", monthlyRevenue), "Tổng tiền thu từ hóa đơn dịch vụ trong tháng" });
+
+        lblTotalRevenue.setText(String.format("TỔNG DOANH THU TOÀN HỆ THỐNG: %,.0f VNĐ", totalSystemRevenue));
     }
 }

@@ -9,6 +9,7 @@ public class Employee {
     private String shift;
     private int shiftCount;
     private double totalSalary;
+    private String notes;
 
     public Employee() {}
 
@@ -21,6 +22,7 @@ public class Employee {
         this.shift = shift;
         this.shiftCount = shiftCount;
         this.totalSalary = totalSalary;
+        this.notes = "---";
     }
 
     public String getId() { return id; }
@@ -46,4 +48,7 @@ public class Employee {
 
     public double getTotalSalary() { return totalSalary; }
     public void setTotalSalary(double totalSalary) { this.totalSalary = totalSalary; }
+
+    public String getNotes() { return notes; }
+    public void setNotes(String notes) { this.notes = notes; }
 }

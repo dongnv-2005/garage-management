@@ -14,6 +14,10 @@ public class VehicleManager {
         return repository.findAll();
     }
 
+    public List<Vehicle> searchVehicles(String keyword) {
+        return repository.search(keyword);
+    }
+
     public void addVehicle(String plate, String brand, String model, String ownerId) throws SQLException {
         repository.save(new Vehicle(plate, brand, model, ownerId, null, RepairStatus.WAITING));
     }

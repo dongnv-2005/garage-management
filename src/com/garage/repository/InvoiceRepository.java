@@ -28,6 +28,26 @@ public class InvoiceRepository {
         return list;
     }
 
+    public Invoice findById(String id) {
+        String sql = "SELECT i.*, COALESCE(u.full_name, i.created_by) AS creator_name, COALESCE(c.name, '---') AS customer_name " +
+                     "FROM invoices i " +
+                     "LEFT JOIN users u ON i.created_by = u.username " +
+                     "LEFT JOIN vehicles v ON i.license_plate = v.license_plate " +
+                     "LEFT JOIN customers c ON v.owner_id = c.id " +
+                     "WHERE i.id = ?";
+        try (Connection conn = DatabaseConfig.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, id);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return mapResultSet(rs);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
     public List<Invoice> search(String keyword) {
         List<Invoice> list = new ArrayList<>();
         String sql = "SELECT i.*, COALESCE(u.full_name, i.created_by) AS creator_name, COALESCE(c.name, '---') AS customer_name " +
@@ -63,6 +83,15 @@ public class InvoiceRepository {
             pstmt.setString(5, invoice.getNotes());
             pstmt.setString(6, invoice.getCreatedBy());
             pstmt.setDouble(7, invoice.getTotalAmount());
+            pstmt.executeUpdate();
+        }
+    }
+
+    public void delete(String id) throws SQLException {
+        String sql = "DELETE FROM invoices WHERE id = ?";
+        try (Connection conn = DatabaseConfig.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, id);
             pstmt.executeUpdate();
         }
     }

@@ -47,6 +47,32 @@ public class BillingManager {
         vehicleRepository.updateStatus(licensePlate, RepairStatus.COMPLETED);
     }
 
+    public void deleteInvoice(String invoiceId) throws SQLException {
+        Invoice invoice = invoiceRepository.findById(invoiceId);
+        if (invoice != null) {
+            String partInfo = invoice.getPartInfo();
+            if (partInfo != null && !partInfo.equals("---") && partInfo.contains("(SL:")) {
+                try {
+                    String partName = partInfo.substring(0, partInfo.lastIndexOf("(SL:")).trim();
+                    String qtyStr = partInfo.substring(partInfo.lastIndexOf("(SL:") + 4, partInfo.lastIndexOf(")")).trim();
+                    int qty = Integer.parseInt(qtyStr);
+
+                    List<Part> allParts = partRepository.findAll();
+                    for (Part p : allParts) {
+                        if (p.getName().equalsIgnoreCase(partName)) {
+                            partRepository.addStock(p.getId(), qty, p.getExportPrice());
+                            partRepository.logPartTransaction(p.getId(), p.getName(), qty, "HOÀN KHO DO XÓA HĐ", invoice.getCreatedBy());
+                            break;
+                        }
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+            invoiceRepository.delete(invoiceId);
+        }
+    }
+
     public List<Part> getAllParts() {
         return partRepository.findAll();
     }

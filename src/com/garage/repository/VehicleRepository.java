@@ -32,6 +32,35 @@ public class VehicleRepository {
         return list;
     }
 
+    public List<Vehicle> search(String keyword) {
+        List<Vehicle> list = new ArrayList<>();
+        String sql = "SELECT v.*, COALESCE(c.name, '---') AS owner_name FROM vehicles v LEFT JOIN customers c ON v.owner_id = c.id " +
+                     "WHERE v.license_plate LIKE ? OR v.brand LIKE ? OR v.model LIKE ? OR v.owner_id LIKE ? OR c.name LIKE ?";
+        try (Connection conn = DatabaseConfig.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, "%" + keyword + "%");
+            pstmt.setString(2, "%" + keyword + "%");
+            pstmt.setString(3, "%" + keyword + "%");
+            pstmt.setString(4, "%" + keyword + "%");
+            pstmt.setString(5, "%" + keyword + "%");
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+                String model = rs.getString("model");
+                list.add(new Vehicle(
+                        rs.getString("license_plate"),
+                        rs.getString("brand"),
+                        (model == null || model.isEmpty()) ? "---" : model,
+                        rs.getString("owner_id"),
+                        rs.getString("owner_name"),
+                        RepairStatus.valueOf(rs.getString("status"))
+                ));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return list;
+    }
+
     public void save(Vehicle vehicle) throws SQLException {
         String sql = "INSERT INTO vehicles (license_plate, brand, model, owner_id, status) VALUES (?, ?, ?, ?, 'WAITING')";
         try (Connection conn = DatabaseConfig.getConnection();

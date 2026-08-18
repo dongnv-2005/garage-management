@@ -13,8 +13,9 @@ public class DatabaseConfig {
     private static final String SERVER_URL = "jdbc:mysql://localhost:3306/?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&allowMultiQueries=true";
     private static final String DB_URL = "jdbc:mysql://localhost:3306/garage_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true";
     
-    private static final String USER = "root"; 
-    private static final String PASS = "123456"; 
+    private static String USER = System.getenv("DB_USER") != null ? System.getenv("DB_USER") : "root";
+    private static String PASS = System.getenv("DB_PASS") != null ? System.getenv("DB_PASS") : "123456";
+    private static final String[] COMMON_PASSWORDS = {"123456", "", "root", "admin", "password"};
 
     public static Connection getConnection() throws SQLException {
         try {
@@ -22,26 +23,56 @@ public class DatabaseConfig {
         } catch (ClassNotFoundException e) {
             e.printStackTrace();
         }
-        return DriverManager.getConnection(DB_URL, USER, PASS);
+        
+        // Thử mật khẩu cấu hình hiện tại trước
+        try {
+            return DriverManager.getConnection(DB_URL, USER, PASS);
+        } catch (SQLException e) {
+            // Nếu thất bại, thử các mật khẩu phổ biến khác
+            for (String p : COMMON_PASSWORDS) {
+                try {
+                    Connection c = DriverManager.getConnection(DB_URL, USER, p);
+                    PASS = p; // Lưu mật khẩu đúng để dùng cho các lần sau
+                    return c;
+                } catch (SQLException ignored) {}
+            }
+            throw e;
+        }
     }
 
     public static void initDatabase() {
         System.out.println("Đang kiểm tra và khởi tạo Cơ sở dữ liệu từ file schema.sql...");
         
-        try (Connection conn = DriverManager.getConnection(SERVER_URL, USER, PASS);
-             Statement stmt = conn.createStatement()) {
-
-            String sqlScript = readSqlFile("schema.sql");
-            if (sqlScript != null && !sqlScript.trim().isEmpty()) {
-                stmt.execute(sqlScript);
-                System.out.println("Tự động tạo Database & Tables từ file script .sql thành công!");
-            } else {
-                System.err.println("File schema.sql rỗng hoặc không tìm thấy!");
+        Connection conn = null;
+        try {
+            try {
+                conn = DriverManager.getConnection(SERVER_URL, USER, PASS);
+            } catch (SQLException e) {
+                for (String p : COMMON_PASSWORDS) {
+                    try {
+                        conn = DriverManager.getConnection(SERVER_URL, USER, p);
+                        PASS = p;
+                        break;
+                    } catch (SQLException ignored) {}
+                }
+                if (conn == null) throw e;
             }
 
+            try (Statement stmt = conn.createStatement()) {
+                String sqlScript = readSqlFile("schema.sql");
+                if (sqlScript != null && !sqlScript.trim().isEmpty()) {
+                    stmt.execute(sqlScript);
+                    System.out.println("Tự động tạo Database & Tables từ file script .sql thành công!");
+                } else {
+                    System.err.println("File schema.sql rỗng hoặc không tìm thấy!");
+                }
+            }
         } catch (SQLException e) {
-            System.err.println("Lỗi khi tự động chạy script khởi tạo Database!");
-            e.printStackTrace();
+            System.err.println("Lỗi khi tự động chạy script khởi tạo Database: " + e.getMessage());
+        } finally {
+            if (conn != null) {
+                try { conn.close(); } catch (Exception ignored) {}
+            }
         }
     }
 

@@ -10,6 +10,8 @@ public class Employee {
     private int shiftCount;
     private double totalSalary;
     private String notes;
+    private String managedBy;
+    private boolean isNotified;
 
     public Employee() {}
 
@@ -23,6 +25,8 @@ public class Employee {
         this.shiftCount = shiftCount;
         this.totalSalary = totalSalary;
         this.notes = "---";
+        this.managedBy = null;
+        this.isNotified = false;
     }
 
     public String getId() { return id; }
@@ -51,4 +55,10 @@ public class Employee {
 
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+
+    public String getManagedBy() { return managedBy; }
+    public void setManagedBy(String managedBy) { this.managedBy = managedBy; }
+
+    public boolean isNotified() { return isNotified; }
+    public void setNotified(boolean isNotified) { this.isNotified = isNotified; }
 }

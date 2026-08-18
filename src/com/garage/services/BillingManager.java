@@ -24,7 +24,7 @@ public class BillingManager {
     }
 
     public void createInvoice(String licensePlate, String serviceType, String selectedPartRaw, int partQty, String notes, double totalAmount, String currentUsername) throws SQLException {
-        String invId = "INV-" + (System.currentTimeMillis() % 10000);
+        String invId = "INV-" + new java.text.SimpleDateFormat("yyMMddHHmmssSSS").format(new java.util.Date());
         String partInfoStr = "---";
 
         if ("Thay thế phụ tùng kho".equals(serviceType)) {

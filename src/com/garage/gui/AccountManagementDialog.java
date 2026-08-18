@@ -85,12 +85,16 @@ public class AccountManagementDialog extends JDialog {
                 p1.setString(2, user.getUsername());
                 p1.executeUpdate();
 
-                PreparedStatement p2 = conn.prepareStatement("UPDATE employees SET name = ?, phone = ? WHERE id = ? OR name LIKE ?");
+                // Cập nhật chính xác nhân viên tương ứng
+                PreparedStatement p2 = conn.prepareStatement("UPDATE employees SET name = ?, phone = ? WHERE id = ? OR name = ?");
                 p2.setString(1, newFullName);
                 p2.setString(2, newPhone.isEmpty() ? "---" : newPhone);
                 p2.setString(3, user.getUsername());
-                p2.setString(4, "%" + user.getFullName() + "%");
+                p2.setString(4, user.getFullName());
                 p2.executeUpdate();
+
+                // Cập nhật lại session người dùng hiện tại
+                user.setFullName(newFullName);
 
                 JOptionPane.showMessageDialog(this, "Cập nhật thông tin tài khoản thành công!", "Thông báo", JOptionPane.INFORMATION_MESSAGE);
                 dispose();
@@ -106,9 +110,9 @@ public class AccountManagementDialog extends JDialog {
 
     private void loadEmployeePhone(String username, String fullName) {
         try (Connection conn = DatabaseConfig.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement("SELECT phone FROM employees WHERE id = ? OR name LIKE ?")) {
+             PreparedStatement pstmt = conn.prepareStatement("SELECT phone FROM employees WHERE id = ? OR name = ?")) {
             pstmt.setString(1, username);
-            pstmt.setString(2, "%" + fullName + "%");
+            pstmt.setString(2, fullName);
             ResultSet rs = pstmt.executeQuery();
             if (rs.next()) {
                 String phone = rs.getString("phone");

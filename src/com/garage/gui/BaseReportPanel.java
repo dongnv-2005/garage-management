@@ -38,10 +38,9 @@ public abstract class BaseReportPanel extends JPanel {
         for (int y = currentYear - 5; y <= currentYear; y++) cbReportYear.addItem(y);
         cbReportYear.setSelectedItem(currentYear);
 
-        // --- SỬA NÚT "XEM THỐNG KÊ" DỄ NHÌN HƠN TẠI ĐÂY ---
         JButton btnFilter = new JButton("Xem Thống Kê");
-        btnFilter.setBackground(new Color(142, 68, 173)); // Màu tím mộng mơ
-        btnFilter.setForeground(Color.WHITE);             // Chữ trắng tương phản cao
+        btnFilter.setBackground(new Color(142, 68, 173));
+        btnFilter.setForeground(Color.WHITE);             
         btnFilter.setFont(new Font("SansSerif", Font.BOLD, 12));
         btnFilter.setFocusPainted(false);
         btnFilter.setOpaque(true);

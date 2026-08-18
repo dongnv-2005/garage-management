@@ -63,24 +63,19 @@ public class ServiceChartReportPanel extends BaseReportPanel {
         chartCanvas.updateData(serviceStats, "Tháng " + selectedMonth + "/" + selectedYear);
     }
 
-    // =========================================================
-    // LỚP VẼ BIỂU ĐỒ VỚI TÍNH NĂNG HOVER TOOLTIP THEO CHUỘT
-    // =========================================================
     private static class ChartCanvas extends JPanel {
         private Map<String, ServiceStat> data = new HashMap<>();
         private String timeTitle = "";
 
-        // Biến lưu tọa độ chuột và thông tin cột đang hover
         private Point mousePos = null;
         private String hoveredText = null;
 
         public ChartCanvas() {
-            // Lắng nghe di chuyển chuột
             java.awt.event.MouseAdapter mouseHandler = new java.awt.event.MouseAdapter() {
                 @Override
                 public void mouseMoved(java.awt.event.MouseEvent e) {
                     mousePos = e.getPoint();
-                    repaint(); // Request vẽ lại màn hình để cập nhật vị trí Tooltip
+                    repaint();
                 }
 
                 @Override
@@ -129,17 +124,15 @@ public class ServiceChartReportPanel extends BaseReportPanel {
             int barSpace = (width - 2 * padding) / barCount;
             int barWidth = Math.min(barSpace - 25, 80);
 
-            // Trục hoành
             g2d.setColor(Color.DARK_GRAY);
             g2d.drawLine(padding, height - bottomPadding, width - padding, height - bottomPadding);
 
-            // Tiêu đề
             g2d.setFont(new Font("SansSerif", Font.BOLD, 15));
             g2d.setColor(new Color(41, 128, 185));
             g2d.drawString("Thống kê Doanh thu & Số lượng Hóa đơn theo Dịch vụ (" + timeTitle + ")", padding, topPadding - 25);
 
             int x = padding + (barSpace - barWidth) / 2;
-            hoveredText = null; // Reset text tooltip trước khi duyệt các cột
+            hoveredText = null; 
 
             for (Map.Entry<String, ServiceStat> entry : data.entrySet()) {
                 ServiceStat stat = entry.getValue();
@@ -149,7 +142,6 @@ public class ServiceChartReportPanel extends BaseReportPanel {
 
                 int y = height - bottomPadding - barHeight;
 
-                // Vùng phát hiện rê chuột (Bao gồm cả Cột + Tên dịch vụ phía dưới)
                 Rectangle barBounds = new Rectangle(x, y, barWidth, barHeight);
                 Rectangle labelBounds = new Rectangle(x - 10, height - bottomPadding, barWidth + 20, bottomPadding);
 
@@ -159,20 +151,17 @@ public class ServiceChartReportPanel extends BaseReportPanel {
                     hoveredText = entry.getKey() + " | " + stat.count + " HĐ | Doanh thu: " + String.format("%,.0f VNĐ", stat.revenue);
                 }
 
-                // 1. Vẽ Cột Biểu Đồ (Đổi màu sáng hơn một chút khi hover)
                 g2d.setColor(isHovered ? new Color(41, 128, 185) : new Color(52, 152, 219));
                 g2d.fillRect(x, y, barWidth, barHeight);
                 g2d.setColor(Color.BLACK);
                 g2d.drawRect(x, y, barWidth, barHeight);
 
-                // 2. Số lượng hóa đơn trên đỉnh cột
                 g2d.setColor(new Color(192, 57, 43));
                 g2d.setFont(new Font("SansSerif", Font.BOLD, 13));
                 String countTxt = stat.count + " HĐ";
                 FontMetrics fm = g2d.getFontMetrics();
                 g2d.drawString(countTxt, x + (barWidth - fm.stringWidth(countTxt)) / 2, y - 8);
 
-                // 3. Doanh thu xoay dọc trong cột
                 g2d.setColor(Color.WHITE);
                 g2d.setFont(new Font("SansSerif", Font.BOLD, 12));
                 String revTxt = String.format("%,.0f VNĐ", stat.revenue);
@@ -184,7 +173,6 @@ public class ServiceChartReportPanel extends BaseReportPanel {
                 g2d.drawString(revTxt, 0, 0);
                 g2d.setTransform(orig);
 
-                // 4. Tên dịch vụ dưới chân cột (cắt ngắn nếu dài)
                 g2d.setColor(isHovered ? new Color(142, 68, 173) : Color.BLACK);
                 g2d.setFont(new Font("SansSerif", isHovered ? Font.BOLD : Font.PLAIN, 11));
                 String sName = entry.getKey();
@@ -195,9 +183,6 @@ public class ServiceChartReportPanel extends BaseReportPanel {
                 x += barSpace;
             }
 
-            // =========================================================
-            // 5. VẼ TOOLTIP THEO CON TRỎ CHUỘT
-            // =========================================================
             if (mousePos != null && hoveredText != null) {
                 g2d.setFont(new Font("SansSerif", Font.PLAIN, 12));
                 FontMetrics fm = g2d.getFontMetrics();
@@ -205,27 +190,22 @@ public class ServiceChartReportPanel extends BaseReportPanel {
                 int tooltipWidth = fm.stringWidth(hoveredText) + 24;
                 int tooltipHeight = 32;
 
-                // Tính toán tọa độ đặt tooltip bên cạnh con trỏ chuột
+
                 int tx = mousePos.x + 15;
                 int ty = mousePos.y + 15;
 
-                // Xử lý chống tràn màn hình sang rìa phải/phía dưới
                 if (tx + tooltipWidth > width - 10) tx = mousePos.x - tooltipWidth - 10;
                 if (ty + tooltipHeight > height - 10) ty = mousePos.y - tooltipHeight - 10;
 
-                // Vẽ bóng mờ (Shadow)
                 g2d.setColor(new Color(0, 0, 0, 40));
                 g2d.fillRoundRect(tx + 2, ty + 2, tooltipWidth, tooltipHeight, 16, 16);
 
-                // Vẽ Nền Tooltip (Màu tối / Dark mode hiện đại)
                 g2d.setColor(new Color(33, 33, 33, 230));
                 g2d.fillRoundRect(tx, ty, tooltipWidth, tooltipHeight, 16, 16);
 
-                // Vẽ Viền Tooltip
                 g2d.setColor(new Color(255, 255, 255, 80));
                 g2d.drawRoundRect(tx, ty, tooltipWidth, tooltipHeight, 16, 16);
 
-                // Vẽ Chữ Tooltip
                 g2d.setColor(Color.WHITE);
                 g2d.drawString(hoveredText, tx + 12, ty + (tooltipHeight + fm.getAscent()) / 2 - 2);
             }

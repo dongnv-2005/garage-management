@@ -48,7 +48,9 @@ CREATE TABLE IF NOT EXISTS employees (
     cccd VARCHAR(20) DEFAULT '---',
     role VARCHAR(50) NOT NULL,
     shift VARCHAR(50) NOT NULL,
-    notes VARCHAR(255) DEFAULT '---'
+    notes VARCHAR(255) DEFAULT '---',
+    managed_by VARCHAR(50) DEFAULT NULL,
+    is_notified BOOLEAN DEFAULT FALSE
 );
 
 -- 6. BẢNG NHẬT KÝ CHẤM CÔNG
@@ -99,15 +101,15 @@ INSERT INTO users (username, password, full_name, role) VALUES
 ('namlv', '123456', 'Lê Văn Nam', 'RECEPTIONIST')
 AS new_row ON DUPLICATE KEY UPDATE full_name = new_row.full_name;
 
-INSERT INTO employees (id, name, phone, cccd, role, shift, notes) VALUES 
-('ADMIN', 'Chủ Garage', '0901112233', '001099887766', 'Chủ Garage', 'Toàn thời gian', 'Quản lý chung toàn gara'),
-('NV01', 'Trần Thị Hòa', '0912345678', '001122334455', 'Lễ Tân', 'Ca 1 (06:00 - 14:00)', 'Phụ trách tiếp nhận ca sáng'),
-('NV02', 'Lê Văn Nam', '0988776655', '001122334466', 'Lễ Tân', 'Ca 2 (14:00 - 22:00)', 'Phụ trách tiếp nhận ca chiều'),
-('NV03', 'Nguyễn Văn Mạnh', '0977112233', '001122334477', 'Kỹ Thuật Viên', 'Ca 1 (06:00 - 14:00)', 'Thợ máy chính (Chuyên động cơ)'),
-('NV04', 'Phạm Hoàng Long', '0966445566', '001122334488', 'Kỹ Thuật Viên', 'Ca 1 (06:00 - 14:00)', 'Thợ gầm điện tay nghề cao'),
-('NV05', 'Bùi Đức Anh', '0955332211', '001122334499', 'Kỹ Thuật Viên', 'Ca 2 (14:00 - 22:00)', 'Thợ gầm máy ca chiều'),
-('NV06', 'Vũ Thị Mai', '0944221100', '001122335500', 'Kỹ Thuật Viên', 'Ca 2 (14:00 - 22:00)', 'Kỹ thuật viên gầm nội thất'),
-('NV07', 'Đặng Quốc Huy', '0933889900', '001122335511', 'Kỹ Thuật Viên', 'Ca 1 (06:00 - 14:00)', 'Nhân viên mới thử việc')
+INSERT INTO employees (id, name, phone, cccd, role, shift, notes, managed_by, is_notified) VALUES 
+('ADMIN', 'Chủ Garage', '0901112233', '001099887766', 'Chủ Garage', 'Toàn thời gian', 'Quản lý chung toàn gara', NULL, TRUE),
+('NV01', 'Trần Thị Hòa', '0912345678', '001122334455', 'Lễ Tân', 'Ca 1 (06:00 - 14:00)', 'Phụ trách tiếp nhận ca sáng', NULL, TRUE),
+('NV02', 'Lê Văn Nam', '0988776655', '001122334466', 'Lễ Tân', 'Ca 2 (14:00 - 22:00)', 'Phụ trách tiếp nhận ca chiều', NULL, TRUE),
+('NV03', 'Nguyễn Văn Mạnh', '0977112233', '001122334477', 'Kỹ Thuật Viên', 'Ca 1 (06:00 - 14:00)', 'Thợ máy chính (Chuyên động cơ)', 'NV01', TRUE),
+('NV04', 'Phạm Hoàng Long', '0966445566', '001122334488', 'Kỹ Thuật Viên', 'Ca 1 (06:00 - 14:00)', 'Thợ gầm điện tay nghề cao', 'NV01', TRUE),
+('NV05', 'Bùi Đức Anh', '0955332211', '001122334499', 'Kỹ Thuật Viên', 'Ca 2 (14:00 - 22:00)', 'Thợ gầm máy ca chiều', 'NV02', TRUE),
+('NV06', 'Vũ Thị Mai', '0944221100', '001122335500', 'Kỹ Thuật Viên', 'Ca 2 (14:00 - 22:00)', 'Kỹ thuật viên gầm nội thất', 'NV02', TRUE),
+('NV07', 'Đặng Quốc Huy', '0933889900', '001122335511', 'Kỹ Thuật Viên', 'Ca 1 (06:00 - 14:00)', 'Nhân viên mới thử việc', 'NV01', TRUE)
 AS new_row ON DUPLICATE KEY UPDATE name = new_row.name;
 
 INSERT INTO customers (id, name, phone) VALUES 

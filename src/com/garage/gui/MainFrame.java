@@ -2,11 +2,7 @@ package com.garage.gui;
 
 import com.garage.enums.RepairStatus;
 import com.garage.enums.Role;
-import com.garage.models.Customer;
-import com.garage.models.Employee;
-import com.garage.models.Invoice;
-import com.garage.models.Part;
-import com.garage.models.Vehicle;
+import com.garage.models.*;
 import com.garage.repository.EmployeeRepository;
 import com.garage.services.AuthService;
 import com.garage.services.BillingManager;
@@ -14,18 +10,11 @@ import com.garage.services.CustomerManager;
 import com.garage.services.VehicleManager;
 
 import javax.swing.*;
-import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.awt.event.MouseMotionAdapter;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public class MainFrame extends JFrame {
     private final CustomerManager customerManager = new CustomerManager();
@@ -55,6 +44,9 @@ public class MainFrame extends JFrame {
         tabbedPane.addTab("Quản lý Kho Phụ tùng", createPartPanel());
         tabbedPane.addTab("Gán Dịch vụ & Xuất Hóa đơn", createBillingPanel());
 
+        // Tự động phân bổ KTV cho các lễ tân nếu có KTV chưa được phân công
+        employeeRepository.autoAssignUnassignedKtvs();
+
         if (currentRole == Role.ADMIN) {
             tabbedPane.addTab("Quản lý Nhân sự & Chấm công", createEmployeePanel());
 
@@ -70,6 +62,23 @@ public class MainFrame extends JFrame {
             tabbedPane.addTab("Báo cáo Doanh thu & Thống kê", reportSubTabs);
         } else {
             tabbedPane.addTab("Lịch Sử Chấm Công Nhóm", createReceptionistAttendancePanel());
+
+            // Kiểm tra thông báo KTV mới được gán cho Lễ tân khi đăng nhập lần đầu
+            String recEmpId = employeeRepository.getEmployeeIdByUsernameOrName(currentUsername, currentFullName);
+            List<String> unnotifiedKtvs = employeeRepository.getUnnotifiedKtvsForReceptionist(recEmpId);
+            if (!unnotifiedKtvs.isEmpty()) {
+                SwingUtilities.invokeLater(() -> {
+                    for (String ktvName : unnotifiedKtvs) {
+                        JOptionPane.showMessageDialog(
+                                this,
+                                "Kỹ thuật viên: " + ktvName + " đã được thêm vào danh sách chấm công nhóm của bạn!",
+                                "Thông Báo Phân Công Kỹ Thuật Viên Mới",
+                                JOptionPane.INFORMATION_MESSAGE
+                        );
+                    }
+                    employeeRepository.markKtvsAsNotified(recEmpId);
+                });
+            }
         }
 
         int totalTabs = tabbedPane.getTabCount();
@@ -501,7 +510,11 @@ public class MainFrame extends JFrame {
                     String partId = selectedPart.split(" - ")[0];
                     Part p = billingManager.getAllParts().stream().filter(item -> item.getId().equals(partId)).findFirst().orElse(null);
                     if (p != null) {
-                        int qty = Integer.parseInt(txtPartQty.getText().trim().replaceAll("[^0-9]", "1"));
+                        int qty = 1;
+                        try {
+                            String qStr = txtPartQty.getText().trim();
+                            if (!qStr.isEmpty()) qty = Math.max(1, Integer.parseInt(qStr.replaceAll("[^0-9]", "")));
+                        } catch (Exception ignored) {}
                         txtAmount.setText(String.format("%.0f", p.getExportPrice() * qty));
                     }
                 }
@@ -519,11 +532,21 @@ public class MainFrame extends JFrame {
                 reloadPartCombo.run();
                 autoCalculatePartPrice.run();
             } else {
-                if (selected.contains("Rửa xe")) txtAmount.setText("30000");
-                else if (selected.contains("Thay dầu")) txtAmount.setText("150000");
-                else if (selected.contains("Bảo dưỡng")) txtAmount.setText("250000");
-                else if (selected.contains("Sửa chữa động cơ")) txtAmount.setText("1500000");
-                else if (selected.contains("Sửa chữa hệ thống phanh")) txtAmount.setText("300000");
+                if (selected.contains("Thay dầu")) {
+                    BaseService service = new OilChangeService("SRV-OIL", 1.0, 50000);
+                    txtAmount.setText(String.format("%.0f", service.calculateCost()));
+                } else if (selected.contains("Bảo dưỡng")) {
+                    BaseService service = new MaintenanceService("SRV-MAINT", 1.0, 50000);
+                    txtAmount.setText(String.format("%.0f", service.calculateCost()));
+                } else if (selected.contains("Sửa chữa động cơ")) {
+                    BaseService service = new EngineRepairService("SRV-ENG", 1000000, 1.0);
+                    txtAmount.setText(String.format("%.0f", service.calculateCost()));
+                } else if (selected.contains("Sửa chữa hệ thống phanh")) {
+                    BaseService service = new MaintenanceService("SRV-BRAKE", 2.0, 50000);
+                    txtAmount.setText(String.format("%.0f", service.calculateCost()));
+                } else if (selected.contains("Rửa xe")) {
+                    txtAmount.setText("30000");
+                }
             }
         });
 
@@ -540,8 +563,19 @@ public class MainFrame extends JFrame {
             String plate = selectedPlateItem.split(" ")[0];
             String serviceType = (String) cbServiceType.getSelectedItem();
             String selectedPartRaw = (String) cbPartSelect.getSelectedItem();
-            int partQty = Integer.parseInt(txtPartQty.getText().trim().replaceAll("[^0-9]", "1"));
-            double totalAmount = Double.parseDouble(txtAmount.getText().trim());
+            
+            int partQty = 1;
+            try {
+                String qStr = txtPartQty.getText().trim();
+                if (!qStr.isEmpty()) partQty = Math.max(1, Integer.parseInt(qStr.replaceAll("[^0-9]", "")));
+            } catch (Exception ignored) {}
+
+            double totalAmount = 0;
+            try {
+                totalAmount = Double.parseDouble(txtAmount.getText().trim());
+            } catch (Exception ex) {
+                totalAmount = 0;
+            }
 
             try {
                 billingManager.createInvoice(plate, serviceType, selectedPartRaw, partQty, txtNotes.getText().trim(), totalAmount, AuthService.getCurrentUser().getUsername());
@@ -861,19 +895,22 @@ public class MainFrame extends JFrame {
             selfAttHistoryModel.setRowCount(0);
             cbKtvSelect.removeAllItems();
 
-            String myShift = employeeRepository.getEmployeeShift(AuthService.getCurrentUser().getUsername(), AuthService.getCurrentUser().getFullName());
+            String username = AuthService.getCurrentUser().getUsername();
+            String fullName = AuthService.getCurrentUser().getFullName();
+            String myShift = employeeRepository.getEmployeeShift(username, fullName);
+            String recEmpId = employeeRepository.getEmployeeIdByUsernameOrName(username, fullName);
             
-            List<Object[]> ktvList = employeeRepository.findGroupKtvByShift(myShift);
+            List<Object[]> ktvList = employeeRepository.findGroupKtvByReceptionist(recEmpId, myShift);
             for (Object[] row : ktvList) {
                 groupKtvModel.addRow(row);
                 cbKtvSelect.addItem(row[1] + " - " + row[2]);
             }
 
-            for (Object[] row : employeeRepository.findKtvAttendanceHistoryByShift(myShift)) {
+            for (Object[] row : employeeRepository.findKtvAttendanceHistoryByReceptionist(recEmpId, myShift)) {
                 groupAttHistoryModel.addRow(row);
             }
 
-            for (Object[] row : employeeRepository.findSelfAttendanceLogs(AuthService.getCurrentUser().getUsername(), AuthService.getCurrentUser().getFullName())) {
+            for (Object[] row : employeeRepository.findSelfAttendanceLogs(username, fullName)) {
                 selfAttHistoryModel.addRow(row);
             }
         };
@@ -926,395 +963,5 @@ public class MainFrame extends JFrame {
     private void loadReportData() {
         if (summaryReportPanel != null) summaryReportPanel.reloadReport();
         if (chartReportPanel != null) chartReportPanel.reloadReport();
-    }
-}
-
-abstract class BaseReportPanel extends JPanel {
-    protected final BillingManager billingManager;
-    protected final VehicleManager vehicleManager;
-
-    protected JComboBox<Integer> cbReportMonth;
-    protected JComboBox<Integer> cbReportYear;
-    protected JLabel lblTotalRevenue;
-    protected JPanel contentContainer;
-
-    public BaseReportPanel(BillingManager billingManager, VehicleManager vehicleManager) {
-        this.billingManager = billingManager;
-        this.vehicleManager = vehicleManager;
-
-        setLayout(new BorderLayout(10, 10));
-        setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-
-        JPanel topBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
-        topBar.setBorder(BorderFactory.createTitledBorder("Bộ Lọc Thống Kê Theo Thời Gian"));
-
-        cbReportMonth = new JComboBox<>();
-        for (int m = 1; m <= 12; m++) cbReportMonth.addItem(m);
-        cbReportMonth.setSelectedItem(LocalDate.now().getMonthValue());
-
-        cbReportYear = new JComboBox<>();
-        int currentYear = LocalDate.now().getYear();
-        for (int y = currentYear - 5; y <= currentYear; y++) cbReportYear.addItem(y);
-        cbReportYear.setSelectedItem(currentYear);
-
-        JButton btnFilter = new JButton("Xem Thống Kê");
-        btnFilter.setBackground(new Color(142, 68, 173));
-        btnFilter.setForeground(Color.WHITE);
-        btnFilter.setFont(new Font("SansSerif", Font.BOLD, 12));
-        btnFilter.setFocusPainted(false);
-        btnFilter.setOpaque(true);
-        btnFilter.setContentAreaFilled(true);
-        btnFilter.setBorderPainted(false);
-        btnFilter.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        btnFilter.setPreferredSize(new Dimension(130, 30));
-
-        topBar.add(new JLabel("Tháng:")); topBar.add(cbReportMonth);
-        topBar.add(new JLabel("Năm:")); topBar.add(cbReportYear);
-        topBar.add(btnFilter);
-
-        contentContainer = new JPanel(new BorderLayout());
-
-        JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        bottomPanel.setBackground(new Color(236, 240, 241));
-        bottomPanel.setBorder(BorderFactory.createEmptyBorder(8, 15, 8, 15));
-
-        lblTotalRevenue = new JLabel("TỔNG DOANH THU TOÀN HỆ THỐNG: 0 VNĐ");
-        lblTotalRevenue.setFont(new Font("SansSerif", Font.BOLD, 16));
-        lblTotalRevenue.setForeground(new Color(192, 57, 43));
-        bottomPanel.add(lblTotalRevenue);
-
-        add(topBar, BorderLayout.NORTH);
-        add(contentContainer, BorderLayout.CENTER);
-        add(bottomPanel, BorderLayout.SOUTH);
-
-        btnFilter.addActionListener(e -> reloadReport());
-    }
-
-    public void reloadReport() {
-        int month = (int) cbReportMonth.getSelectedItem();
-        int year = (int) cbReportYear.getSelectedItem();
-
-        List<Invoice> allInvoices = billingManager.getAllInvoices();
-        List<Vehicle> allVehicles = vehicleManager.getAllVehicles();
-
-        double totalSystemRevenue = allInvoices.stream().mapToDouble(Invoice::getTotalAmount).sum();
-        lblTotalRevenue.setText(String.format("TỔNG DOANH THU TOÀN HỆ THỐNG: %,.0f VNĐ", totalSystemRevenue));
-
-        renderReportContent(allInvoices, allVehicles, month, year);
-    }
-
-    protected abstract void renderReportContent(List<Invoice> invoices, List<Vehicle> vehicles, int selectedMonth, int selectedYear);
-}
-
-class TableSummaryReportPanel extends BaseReportPanel {
-    private DefaultTableModel reportModel;
-
-    public TableSummaryReportPanel(BillingManager billingManager, VehicleManager vehicleManager) {
-        super(billingManager, vehicleManager);
-
-        reportModel = new DefaultTableModel(new String[]{"Hạng Mục Thống Kê", "Số Lượng / Giá Trị", "Ghi Chú"}, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) { return false; }
-        };
-
-        JTable reportTable = new JTable(reportModel);
-        reportTable.setRowHeight(35);
-        reportTable.setFont(new Font("SansSerif", Font.PLAIN, 13));
-        reportTable.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 13));
-
-        DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
-        centerRenderer.setHorizontalAlignment(JLabel.CENTER);
-        reportTable.getColumnModel().getColumn(1).setCellRenderer(centerRenderer);
-
-        contentContainer.add(new JScrollPane(reportTable), BorderLayout.CENTER);
-    }
-
-    @Override
-    protected void renderReportContent(List<Invoice> invoices, List<Vehicle> vehicles, int selectedMonth, int selectedYear) {
-        reportModel.setRowCount(0);
-
-        double monthlyRevenue = 0;
-        int doneVehCountInMonth = 0;
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-
-        for (Invoice inv : invoices) {
-            if (inv.getCreatedAt() != null) {
-                try {
-                    LocalDateTime dt = LocalDateTime.parse(inv.getCreatedAt(), formatter);
-                    if (dt.getMonthValue() == selectedMonth && dt.getYear() == selectedYear) {
-                        monthlyRevenue += inv.getTotalAmount();
-                        doneVehCountInMonth++;
-                    }
-                } catch (Exception e) {
-                    try {
-                        String dateOnly = inv.getCreatedAt().split(" ")[0];
-                        String[] parts = dateOnly.split("-");
-                        int y = Integer.parseInt(parts[0]);
-                        int m = Integer.parseInt(parts[1]);
-                        if (m == selectedMonth && y == selectedYear) {
-                            monthlyRevenue += inv.getTotalAmount();
-                            doneVehCountInMonth++;
-                        }
-                    } catch (Exception ignored) {}
-                }
-            }
-        }
-
-        int inProgressVehCount = (int) vehicles.stream().filter(v -> v.getStatus() != RepairStatus.COMPLETED).count();
-        int totalVehInMonth = doneVehCountInMonth + (selectedMonth == LocalDate.now().getMonthValue() && selectedYear == LocalDate.now().getYear() ? inProgressVehCount : 0);
-        String timeTitle = "Tháng " + selectedMonth + "/" + selectedYear;
-
-        reportModel.addRow(new Object[]{"Tổng số xe tiếp nhận (" + timeTitle + ")", totalVehInMonth + " xe", "Bao gồm xe đã xuất HĐ trong tháng và xe đang xử lý"});
-        reportModel.addRow(new Object[]{"Số xe đã hoàn thành (" + timeTitle + ")", doneVehCountInMonth + " xe", "Đã hoàn thành sửa chữa & xuất hóa đơn"});
-        reportModel.addRow(new Object[]{"Số xe đang sửa / chờ xử lý hiện tại", inProgressVehCount + " xe", "Cần tiếp tục theo dõi tiến độ thi công"});
-        reportModel.addRow(new Object[]{"Doanh thu " + timeTitle, String.format("%,.0f VNĐ", monthlyRevenue), "Tổng tiền thu từ hóa đơn dịch vụ trong tháng"});
-    }
-}
-
-class ServiceChartReportPanel extends BaseReportPanel {
-
-    static class ServiceStat {
-        int count = 0;
-        double revenue = 0;
-    }
-
-    private final ChartCanvas chartCanvas;
-
-    public ServiceChartReportPanel(BillingManager billingManager, VehicleManager vehicleManager) {
-        super(billingManager, vehicleManager);
-
-        chartCanvas = new ChartCanvas();
-        contentContainer.add(chartCanvas, BorderLayout.CENTER);
-    }
-
-    @Override
-    protected void renderReportContent(List<Invoice> invoices, List<Vehicle> vehicles, int selectedMonth, int selectedYear) {
-        Map<String, ServiceStat> serviceStats = new HashMap<>();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-
-        for (Invoice inv : invoices) {
-            boolean isMatch = false;
-            if (inv.getCreatedAt() != null) {
-                try {
-                    LocalDateTime dt = LocalDateTime.parse(inv.getCreatedAt(), formatter);
-                    if (dt.getMonthValue() == selectedMonth && dt.getYear() == selectedYear) isMatch = true;
-                } catch (Exception e) {
-                    try {
-                        String dateOnly = inv.getCreatedAt().split(" ")[0];
-                        String[] parts = dateOnly.split("-");
-                        int y = Integer.parseInt(parts[0]);
-                        int m = Integer.parseInt(parts[1]);
-                        if (m == selectedMonth && y == selectedYear) isMatch = true;
-                    } catch (Exception ignored) {}
-                }
-            }
-
-            if (isMatch) {
-                String sName = inv.getServiceName();
-                ServiceStat stat = serviceStats.getOrDefault(sName, new ServiceStat());
-                stat.count++;
-                stat.revenue += inv.getTotalAmount();
-                serviceStats.put(sName, stat);
-            }
-        }
-
-        chartCanvas.updateData(serviceStats, "Tháng " + selectedMonth + "/" + selectedYear);
-    }
-
-    // =========================================================
-    // LỚP VẼ BIỂU ĐỒ - CẬP NHẬT TRỤC Y VÀ HTML TOOLTIP
-    // =========================================================
-    private static class ChartCanvas extends JPanel {
-        private Map<String, ServiceStat> data = new HashMap<>();
-        private String timeTitle = "";
-        
-        // Tọa độ con trỏ chuột hiện tại để đổi màu hover
-        private int mouseX = -1;
-
-        public ChartCanvas() {
-            // Đăng ký sử dụng Tooltip native của Swing để đảm bảo luôn nổi lên trên cùng
-            ToolTipManager.sharedInstance().registerComponent(this);
-
-            // Bắt sự kiện rê chuột để highlight màu cột
-            addMouseMotionListener(new MouseMotionAdapter() {
-                @Override
-                public void mouseMoved(MouseEvent e) {
-                    mouseX = e.getX();
-                    repaint(); // Yêu cầu vẽ lại để cập nhật màu cột
-                }
-            });
-            
-            addMouseListener(new MouseAdapter() {
-                @Override
-                public void mouseExited(MouseEvent e) {
-                    mouseX = -1;
-                    repaint(); // Bỏ highlight khi chuột rời đi
-                }
-            });
-        }
-
-        public void updateData(Map<String, ServiceStat> data, String timeTitle) {
-            this.data = data;
-            this.timeTitle = timeTitle;
-            repaint();
-        }
-        
-        // Hàm này tự động được gọi bởi Swing khi người dùng rê chuột, dùng để hiển thị HTML Tooltip
-        @Override
-        public String getToolTipText(MouseEvent e) {
-            if (data == null || data.isEmpty()) return null;
-
-            int paddingLeft = 100;
-            int paddingRight = 40;
-            int barCount = data.size();
-            int barSpace = (getWidth() - paddingLeft - paddingRight) / barCount;
-            int barWidth = Math.min(barSpace - 25, 80);
-
-            int x = paddingLeft + (barSpace - barWidth) / 2;
-
-            for (Map.Entry<String, ServiceStat> entry : data.entrySet()) {
-                // Kiểm tra xem chuột đang nằm trong phạm vi ngang của cột nào
-                if (e.getX() >= x && e.getX() <= x + barWidth) {
-                    ServiceStat stat = entry.getValue();
-                    // Trả về chuỗi HTML chuẩn xịn để hiển thị Tooltip nổi
-                    return "<html><div style='padding:5px; font-family:sans-serif;'>" 
-                            + "<b style='color:#2980b9; font-size: 11px;'>" + entry.getKey() + "</b><br/>"
-                            + "<hr/>"
-                            + "Số lượng HĐ: <b style='color:#e74c3c'>" + stat.count + "</b><br/>"
-                            + "Doanh thu: <b style='color:#c0392b'>" + String.format("%,.0f VNĐ", stat.revenue) + "</b>"
-                            + "</div></html>";
-                }
-                x += barSpace;
-            }
-            return null;
-        }
-
-        @Override
-        protected void paintComponent(Graphics g) {
-            super.paintComponent(g);
-            Graphics2D g2d = (Graphics2D) g;
-            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-            int width = getWidth();
-            int height = getHeight();
-
-            g2d.setColor(Color.WHITE);
-            g2d.fillRect(0, 0, width, height);
-
-            if (data == null || data.isEmpty()) {
-                g2d.setColor(Color.GRAY);
-                g2d.setFont(new Font("SansSerif", Font.ITALIC, 14));
-                g2d.drawString("Không có dữ liệu hóa đơn cho " + timeTitle, width / 2 - 130, height / 2);
-                return;
-            }
-
-            int paddingLeft = 100;
-            int paddingRight = 40;
-            int bottomPadding = 60;
-            int topPadding = 60;
-            int chartHeight = height - topPadding - bottomPadding;
-
-            // Tìm giá trị max để vẽ trục Y
-            double maxRev = data.values().stream().mapToDouble(v -> v.revenue).max().orElse(1);
-            if (maxRev == 0) maxRev = 1; // Chống chia cho 0
-
-            // ==========================================
-            // VẼ TRỤC Y (CỘT MỐC GIÁ TRỊ) & ĐƯỜNG LƯỚI
-            // ==========================================
-            g2d.setFont(new Font("SansSerif", Font.PLAIN, 11));
-            for (int i = 0; i <= 5; i++) {
-                double val = (maxRev / 5.0) * i;
-                int yPos = height - bottomPadding - (int) ((val / maxRev) * chartHeight);
-
-                // Đường lưới mờ (Grid Line)
-                g2d.setColor(new Color(230, 230, 230)); 
-                g2d.drawLine(paddingLeft - 5, yPos, width - paddingRight, yPos);
-
-                // Chữ số trục Y bên trái
-                g2d.setColor(Color.DARK_GRAY);
-                String valTxt = formatCurrencyShorthand(val); // Hiển thị rút gọn (VD: 1.5 Tr, 300 K)
-                FontMetrics fmVal = g2d.getFontMetrics();
-                g2d.drawString(valTxt, paddingLeft - 10 - fmVal.stringWidth(valTxt), yPos + 4);
-            }
-
-            // Trục ngang X (đậm hơn)
-            g2d.setColor(Color.DARK_GRAY);
-            g2d.drawLine(paddingLeft, height - bottomPadding, width - paddingRight, height - bottomPadding);
-
-            // Tiêu đề biểu đồ
-            g2d.setFont(new Font("SansSerif", Font.BOLD, 15));
-            g2d.setColor(new Color(41, 128, 185));
-            g2d.drawString("Thống kê Doanh thu & Số lượng Hóa đơn theo Dịch vụ (" + timeTitle + ")", paddingLeft, topPadding - 25);
-
-            // ==========================================
-            // VẼ CÁC CỘT BIỂU ĐỒ & CHỮ BÊN TRONG
-            // ==========================================
-            int barCount = data.size();
-            int barSpace = (width - paddingLeft - paddingRight) / barCount;
-            int barWidth = Math.min(barSpace - 25, 80);
-            int x = paddingLeft + (barSpace - barWidth) / 2;
-
-            for (Map.Entry<String, ServiceStat> entry : data.entrySet()) {
-                ServiceStat stat = entry.getValue();
-
-                int barHeight = (int) ((stat.revenue / maxRev) * chartHeight);
-                if (barHeight < 40) barHeight = 40; // Chiều cao cột tối thiểu
-                int y = height - bottomPadding - barHeight;
-
-                // Xác định nếu chuột đang nằm trên cột này thì đổi màu đậm hơn (Hover Effect)
-                boolean isHovered = (mouseX >= x && mouseX <= x + barWidth);
-
-                // Vẽ cột
-                g2d.setColor(isHovered ? new Color(41, 128, 185) : new Color(52, 152, 219));
-                g2d.fillRect(x, y, barWidth, barHeight);
-                g2d.setColor(Color.BLACK);
-                g2d.drawRect(x, y, barWidth, barHeight);
-
-                // Ghi số lượng hóa đơn TRÊN ĐỈNH CỘT (Màu đỏ)
-                g2d.setColor(new Color(192, 57, 43));
-                g2d.setFont(new Font("SansSerif", Font.BOLD, 13));
-                String countTxt = stat.count + " HĐ";
-                FontMetrics fm = g2d.getFontMetrics();
-                g2d.drawString(countTxt, x + (barWidth - fm.stringWidth(countTxt)) / 2, y - 8);
-
-                // Ghi doanh thu XOAY DỌC TRONG CỘT (Chữ trắng)
-                g2d.setColor(Color.WHITE);
-                g2d.setFont(new Font("SansSerif", Font.BOLD, 12));
-                String revTxt = String.format("%,.0f", stat.revenue);
-                fm = g2d.getFontMetrics();
-
-                // LỖI TRÀN CHỮ FIX: Chỉ vẽ chữ bên trong nếu cột đủ chiều cao
-                if (barHeight > fm.stringWidth(revTxt) + 20) {
-                    java.awt.geom.AffineTransform orig = g2d.getTransform();
-                    g2d.translate(x + barWidth / 2 + fm.getAscent() / 3, y + barHeight - 12);
-                    g2d.rotate(-Math.PI / 2);
-                    g2d.drawString(revTxt, 0, 0);
-                    g2d.setTransform(orig);
-                }
-
-                // Ghi tên dịch vụ dưới chân trục ngang
-                g2d.setColor(isHovered ? new Color(192, 57, 43) : Color.BLACK); // Đỏ lên khi hover
-                g2d.setFont(new Font("SansSerif", isHovered ? Font.BOLD : Font.PLAIN, 11));
-                String sName = entry.getKey();
-                if (sName.length() > 16) sName = sName.substring(0, 14) + "..";
-                fm = g2d.getFontMetrics();
-                g2d.drawString(sName, x + (barWidth - fm.stringWidth(sName)) / 2, height - bottomPadding + 20);
-
-                x += barSpace; // Chuyển sang vẽ cột tiếp theo
-            }
-        }
-
-        // Hàm hỗ trợ format tiền tệ rút gọn dành riêng cho Trục Y
-        private String formatCurrencyShorthand(double amount) {
-            if (amount == 0) return "0";
-            if (amount >= 1_000_000) {
-                double v = amount / 1_000_000.0;
-                return (v == (long) v ? String.format("%.0f Tr", v) : String.format("%.1f Tr", v));
-            } else if (amount >= 1_000) {
-                double v = amount / 1_000.0;
-                return (v == (long) v ? String.format("%.0f K", v) : String.format("%.1f K", v));
-            }
-            return String.format("%,.0f đ", amount);
-        }
     }
 }

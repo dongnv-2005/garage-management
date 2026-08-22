@@ -85,7 +85,6 @@ public class AccountManagementDialog extends JDialog {
                 p1.setString(2, user.getUsername());
                 p1.executeUpdate();
 
-                // Cập nhật chính xác nhân viên tương ứng
                 PreparedStatement p2 = conn.prepareStatement("UPDATE employees SET name = ?, phone = ? WHERE id = ? OR name = ?");
                 p2.setString(1, newFullName);
                 p2.setString(2, newPhone.isEmpty() ? "---" : newPhone);
@@ -93,7 +92,6 @@ public class AccountManagementDialog extends JDialog {
                 p2.setString(4, user.getFullName());
                 p2.executeUpdate();
 
-                // Cập nhật lại session người dùng hiện tại
                 user.setFullName(newFullName);
 
                 JOptionPane.showMessageDialog(this, "Cập nhật thông tin tài khoản thành công!", "Thông báo", JOptionPane.INFORMATION_MESSAGE);

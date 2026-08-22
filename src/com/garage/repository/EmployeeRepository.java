@@ -16,9 +16,10 @@ public class EmployeeRepository {
             ensureAssignmentColumnsExist(conn);
 
             try (Statement stmt = conn.createStatement();
-                 ResultSet rs = stmt.executeQuery(adminSql)) {
+                    ResultSet rs = stmt.executeQuery(adminSql)) {
                 if (rs.next()) {
-                    Employee adminEmp = new Employee("ADMIN", rs.getString("full_name"), "---", "---", "Chủ Garage", "Toàn thời gian", 0, 0);
+                    Employee adminEmp = new Employee("ADMIN", rs.getString("full_name"), "---", "---", "Chủ Garage",
+                            "Toàn thời gian", 0, 0);
                     adminEmp.setNotes(getNotesByEmpId(conn, "ADMIN"));
                     list.add(adminEmp);
                 }
@@ -26,7 +27,7 @@ public class EmployeeRepository {
 
             String sql = "SELECT * FROM employees WHERE id != 'ADMIN' ORDER BY id ASC";
             try (Statement stmt = conn.createStatement();
-                 ResultSet rs = stmt.executeQuery(sql)) {
+                    ResultSet rs = stmt.executeQuery(sql)) {
                 while (rs.next()) {
                     String empId = rs.getString("id");
                     String name = rs.getString("name");
@@ -40,7 +41,8 @@ public class EmployeeRepository {
                     try {
                         managedBy = rs.getString("managed_by");
                         isNotified = rs.getBoolean("is_notified");
-                    } catch (Exception ignored) {}
+                    } catch (Exception ignored) {
+                    }
 
                     int shiftCount = getShiftCount(conn, empId, name);
                     double rate = role.toLowerCase().contains("lễ tân") ? 400000 : 360000;
@@ -50,8 +52,7 @@ public class EmployeeRepository {
                             empId, name,
                             (phone == null || phone.isEmpty()) ? "---" : phone,
                             (cccd == null || cccd.isEmpty()) ? "---" : cccd,
-                            role, shift, shiftCount, totalSalary
-                    );
+                            role, shift, shiftCount, totalSalary);
                     emp.setNotes((notes == null || notes.isEmpty()) ? "---" : notes);
                     emp.setManagedBy(managedBy);
                     emp.setNotified(isNotified);
@@ -70,11 +71,17 @@ public class EmployeeRepository {
                 stmt.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS managed_by VARCHAR(50) DEFAULT NULL");
                 stmt.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS is_notified BOOLEAN DEFAULT FALSE");
             } catch (SQLException e) {
-                // Một số phiên bản MySQL cũ hơn không hỗ trợ IF NOT EXISTS trong ALTER TABLE
-                try { stmt.execute("ALTER TABLE employees ADD COLUMN managed_by VARCHAR(50) DEFAULT NULL"); } catch (Exception ignored) {}
-                try { stmt.execute("ALTER TABLE employees ADD COLUMN is_notified BOOLEAN DEFAULT FALSE"); } catch (Exception ignored) {}
+                try {
+                    stmt.execute("ALTER TABLE employees ADD COLUMN managed_by VARCHAR(50) DEFAULT NULL");
+                } catch (Exception ignored) {
+                }
+                try {
+                    stmt.execute("ALTER TABLE employees ADD COLUMN is_notified BOOLEAN DEFAULT FALSE");
+                } catch (Exception ignored) {
+                }
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
     }
 
     private String getNotesByEmpId(Connection conn, String empId) {
@@ -98,7 +105,8 @@ public class EmployeeRepository {
             pstmt.setString(1, empId);
             pstmt.setString(2, name);
             ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) return rs.getInt(1);
+            if (rs.next())
+                return rs.getInt(1);
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -107,8 +115,7 @@ public class EmployeeRepository {
 
     public String findBestReceptionistForKtv(Connection conn, String shift) {
         List<String> receptionists = new ArrayList<>();
-        
-        // 1. Tìm lễ tân cùng ca làm
+
         String sql = "SELECT id FROM employees WHERE role LIKE '%Lễ Tân%' AND shift = ?";
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, shift);
@@ -120,7 +127,6 @@ public class EmployeeRepository {
             e.printStackTrace();
         }
 
-        // Nếu không có cùng chuỗi ca chính xác, tìm theo từ khóa Ca 1 / Ca 2
         if (receptionists.isEmpty()) {
             String shiftKeyword = shift.contains("1") ? "%1%" : (shift.contains("2") ? "%2%" : "%");
             String sqlFallback = "SELECT id FROM employees WHERE role LIKE '%Lễ Tân%' AND shift LIKE ?";
@@ -135,11 +141,10 @@ public class EmployeeRepository {
             }
         }
 
-        // Nếu vẫn không có, lấy tất cả lễ tân bất kỳ
         if (receptionists.isEmpty()) {
             String sqlAll = "SELECT id FROM employees WHERE role LIKE '%Lễ Tân%'";
             try (Statement stmt = conn.createStatement();
-                 ResultSet rs = stmt.executeQuery(sqlAll)) {
+                    ResultSet rs = stmt.executeQuery(sqlAll)) {
                 while (rs.next()) {
                     receptionists.add(rs.getString("id"));
                 }
@@ -148,9 +153,9 @@ public class EmployeeRepository {
             }
         }
 
-        if (receptionists.isEmpty()) return null;
+        if (receptionists.isEmpty())
+            return null;
 
-        // 2. Đếm số lượng KTV hiện tại mà mỗi lễ tân đang quản lý
         java.util.Map<String, Integer> counts = new java.util.HashMap<>();
         int minCount = Integer.MAX_VALUE;
         for (String recId : receptionists) {
@@ -159,7 +164,8 @@ public class EmployeeRepository {
             try (PreparedStatement pCount = conn.prepareStatement(countSql)) {
                 pCount.setString(1, recId);
                 ResultSet rs = pCount.executeQuery();
-                if (rs.next()) count = rs.getInt(1);
+                if (rs.next())
+                    count = rs.getInt(1);
             } catch (SQLException e) {
                 e.printStackTrace();
             }
@@ -169,7 +175,6 @@ public class EmployeeRepository {
             }
         }
 
-        // 3. Lọc ra danh sách các lễ tân có số KTV ít nhất
         List<String> minCandidates = new ArrayList<>();
         for (java.util.Map.Entry<String, Integer> entry : counts.entrySet()) {
             if (entry.getValue() == minCount) {
@@ -177,7 +182,6 @@ public class EmployeeRepository {
             }
         }
 
-        // 4. Nếu có 1 người thì chọn người đó; nếu bằng nhau thì random chọn 1 người
         if (minCandidates.size() == 1) {
             return minCandidates.get(0);
         } else if (!minCandidates.isEmpty()) {
@@ -193,9 +197,9 @@ public class EmployeeRepository {
             String selectUnassigned = "SELECT id, shift FROM employees WHERE (managed_by IS NULL OR managed_by = '') AND role LIKE '%Kỹ Thuật%'";
             List<String[]> unassignedList = new ArrayList<>();
             try (Statement stmt = conn.createStatement();
-                 ResultSet rs = stmt.executeQuery(selectUnassigned)) {
+                    ResultSet rs = stmt.executeQuery(selectUnassigned)) {
                 while (rs.next()) {
-                    unassignedList.add(new String[]{ rs.getString("id"), rs.getString("shift") });
+                    unassignedList.add(new String[] { rs.getString("id"), rs.getString("shift") });
                 }
             }
 
@@ -217,11 +221,12 @@ public class EmployeeRepository {
 
     public List<String> getUnnotifiedKtvsForReceptionist(String receptionistId) {
         List<String> list = new ArrayList<>();
-        if (receptionistId == null || receptionistId.isEmpty()) return list;
+        if (receptionistId == null || receptionistId.isEmpty())
+            return list;
 
         String sql = "SELECT name FROM employees WHERE managed_by = ? AND is_notified = FALSE AND role LIKE '%Kỹ Thuật%'";
         try (Connection conn = DatabaseConfig.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, receptionistId);
             ResultSet rs = pstmt.executeQuery();
             while (rs.next()) {
@@ -234,11 +239,12 @@ public class EmployeeRepository {
     }
 
     public void markKtvsAsNotified(String receptionistId) {
-        if (receptionistId == null || receptionistId.isEmpty()) return;
+        if (receptionistId == null || receptionistId.isEmpty())
+            return;
 
         String sql = "UPDATE employees SET is_notified = TRUE WHERE managed_by = ? AND is_notified = FALSE";
         try (Connection conn = DatabaseConfig.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, receptionistId);
             pstmt.executeUpdate();
         } catch (SQLException e) {
@@ -249,12 +255,13 @@ public class EmployeeRepository {
     public String getEmployeeIdByUsernameOrName(String username, String fullName) {
         String sql = "SELECT id FROM employees WHERE id = ? OR name = ? OR id = (SELECT username FROM users WHERE username = ? LIMIT 1)";
         try (Connection conn = DatabaseConfig.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, username);
             pstmt.setString(2, fullName);
             pstmt.setString(3, username);
             ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) return rs.getString("id");
+            if (rs.next())
+                return rs.getString("id");
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -268,11 +275,10 @@ public class EmployeeRepository {
             String managedBy = employee.getManagedBy();
             boolean isNotified = employee.isNotified();
 
-            // Nếu là Kỹ thuật viên và chưa được phân công, tự động phân công cho Lễ tân phù hợp
             if (employee.getRole() != null && employee.getRole().toLowerCase().contains("kỹ thuật")) {
                 if (managedBy == null || managedBy.isEmpty()) {
                     managedBy = findBestReceptionistForKtv(conn, employee.getShift());
-                    isNotified = false; // Đặt là false để Lễ tân nhận thông báo khi đăng nhập
+                    isNotified = false;
                 }
             }
 
@@ -295,7 +301,7 @@ public class EmployeeRepository {
     public void update(Employee employee) throws SQLException {
         String sql = "UPDATE employees SET name = ?, phone = ?, cccd = ?, role = ?, shift = ?, notes = ?, managed_by = ? WHERE id = ?";
         try (Connection conn = DatabaseConfig.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                PreparedStatement pstmt = conn.prepareStatement(sql)) {
             ensureAssignmentColumnsExist(conn);
             pstmt.setString(1, employee.getName());
             pstmt.setString(2, employee.getPhone().isEmpty() ? "---" : employee.getPhone());
@@ -312,7 +318,7 @@ public class EmployeeRepository {
     public void delete(String id) throws SQLException {
         String sql = "DELETE FROM employees WHERE id = ?";
         try (Connection conn = DatabaseConfig.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, id);
             pstmt.executeUpdate();
         }
@@ -320,7 +326,7 @@ public class EmployeeRepository {
 
     public boolean addAttendance(String targetInput, String operatorFullName) throws SQLException {
         try (Connection conn = DatabaseConfig.getConnection()) {
-            // 1. Tìm trực tiếp theo id nhân viên hoặc họ tên
+
             String sqlSelect = "SELECT id, name, shift FROM employees WHERE id = ? OR name = ? OR name = ?";
             PreparedStatement pstmtSelect = conn.prepareStatement(sqlSelect);
             pstmtSelect.setString(1, targetInput);
@@ -342,7 +348,6 @@ public class EmployeeRepository {
                 return true;
             }
 
-            // 2. Thử tìm từ bảng users nếu targetInput là username
             String userSql = "SELECT full_name FROM users WHERE username = ?";
             try (PreparedStatement pUser = conn.prepareStatement(userSql)) {
                 pUser.setString(1, targetInput);
@@ -370,7 +375,6 @@ public class EmployeeRepository {
                 }
             }
 
-            // 3. Xử lý trường hợp ADMIN
             if ("ADMIN".equalsIgnoreCase(targetInput) || "admin".equalsIgnoreCase(targetInput)) {
                 String sqlAdmin = "INSERT IGNORE INTO employees (id, name, phone, cccd, role, shift, notes) VALUES ('ADMIN', ?, '---', '---', 'Chủ Garage', 'Toàn thời gian', 'Quản lý')";
                 PreparedStatement pAdmin = conn.prepareStatement(sqlAdmin);
@@ -390,7 +394,7 @@ public class EmployeeRepository {
     public void deleteAttendanceLog(int logId) throws SQLException {
         String sql = "DELETE FROM attendance_logs WHERE id = ?";
         try (Connection conn = DatabaseConfig.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setInt(1, logId);
             pstmt.executeUpdate();
         }
@@ -398,15 +402,14 @@ public class EmployeeRepository {
 
     public boolean resetPassword(String targetInput) throws SQLException {
         try (Connection conn = DatabaseConfig.getConnection()) {
-            // 1. Thử reset trực tiếp nếu targetInput là username hoặc trùng khớp full_name chính xác
             String sql1 = "UPDATE users SET password = '123456' WHERE username = ? OR full_name = ?";
             try (PreparedStatement pstmt1 = conn.prepareStatement(sql1)) {
                 pstmt1.setString(1, targetInput);
                 pstmt1.setString(2, targetInput);
-                if (pstmt1.executeUpdate() > 0) return true;
+                if (pstmt1.executeUpdate() > 0)
+                    return true;
             }
 
-            // 2. Nếu targetInput là mã nhân viên (như NV01, NV02...), lấy tên nhân viên từ bảng employees để reset tài khoản user tương ứng
             String findEmpSql = "SELECT name FROM employees WHERE id = ?";
             try (PreparedStatement pEmp = conn.prepareStatement(findEmpSql)) {
                 pEmp.setString(1, targetInput);
@@ -428,10 +431,10 @@ public class EmployeeRepository {
         List<Object[]> list = new ArrayList<>();
         String sql = "SELECT * FROM attendance_logs ORDER BY check_in_time DESC";
         try (Connection conn = DatabaseConfig.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
+                Statement stmt = conn.createStatement();
+                ResultSet rs = stmt.executeQuery(sql)) {
             while (rs.next()) {
-                list.add(new Object[]{
+                list.add(new Object[] {
                         rs.getInt("id"),
                         rs.getString("employee_id"),
                         rs.getString("employee_name"),
@@ -449,13 +452,13 @@ public class EmployeeRepository {
         List<Object[]> list = new ArrayList<>();
         String sql = "SELECT * FROM attendance_logs WHERE employee_id = ? OR employee_name LIKE ? ORDER BY check_in_time DESC";
         try (Connection conn = DatabaseConfig.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, username);
             pstmt.setString(2, "%" + fullName + "%");
             ResultSet rs = pstmt.executeQuery();
             int stt = 1;
             while (rs.next()) {
-                list.add(new Object[]{
+                list.add(new Object[] {
                         stt++,
                         rs.getString("employee_id"),
                         rs.getString("employee_name"),
@@ -473,7 +476,7 @@ public class EmployeeRepository {
         List<Object[]> list = new ArrayList<>();
         String sql = "SELECT * FROM employees WHERE managed_by = ? AND role LIKE '%Kỹ Thuật%' ORDER BY id ASC";
         try (Connection conn = DatabaseConfig.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, receptionistId);
             ResultSet rs = pstmt.executeQuery();
             int stt = 1;
@@ -481,7 +484,8 @@ public class EmployeeRepository {
                 String ktvId = rs.getString("id");
                 String ktvName = rs.getString("name");
                 String lastCheckin = getLastCheckinTime(conn, ktvId, ktvName);
-                list.add(new Object[]{ stt++, ktvId, ktvName, rs.getString("role"), rs.getString("shift"), lastCheckin });
+                list.add(new Object[] { stt++, ktvId, ktvName, rs.getString("role"), rs.getString("shift"),
+                        lastCheckin });
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -496,17 +500,17 @@ public class EmployeeRepository {
     public List<Object[]> findKtvAttendanceHistoryByReceptionist(String receptionistId, String fallbackShift) {
         List<Object[]> list = new ArrayList<>();
         String sql = "SELECT a.id, a.employee_id, a.employee_name, a.check_in_time, a.shift " +
-                     "FROM attendance_logs a " +
-                     "JOIN employees e ON a.employee_id = e.id " +
-                     "WHERE e.managed_by = ? AND e.role LIKE '%Kỹ Thuật%' " +
-                     "ORDER BY a.check_in_time DESC";
+                "FROM attendance_logs a " +
+                "JOIN employees e ON a.employee_id = e.id " +
+                "WHERE e.managed_by = ? AND e.role LIKE '%Kỹ Thuật%' " +
+                "ORDER BY a.check_in_time DESC";
         try (Connection conn = DatabaseConfig.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, receptionistId);
             ResultSet rs = pstmt.executeQuery();
             int stt = 1;
             while (rs.next()) {
-                list.add(new Object[]{
+                list.add(new Object[] {
                         stt++,
                         rs.getString("employee_id"),
                         rs.getString("employee_name"),
@@ -528,7 +532,7 @@ public class EmployeeRepository {
         List<Object[]> list = new ArrayList<>();
         String sql = "SELECT * FROM employees WHERE shift = ? AND role LIKE '%Kỹ Thuật%'";
         try (Connection conn = DatabaseConfig.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, shift);
             ResultSet rs = pstmt.executeQuery();
             int stt = 1;
@@ -536,7 +540,8 @@ public class EmployeeRepository {
                 String ktvId = rs.getString("id");
                 String ktvName = rs.getString("name");
                 String lastCheckin = getLastCheckinTime(conn, ktvId, ktvName);
-                list.add(new Object[]{ stt++, ktvId, ktvName, rs.getString("role"), rs.getString("shift"), lastCheckin });
+                list.add(new Object[] { stt++, ktvId, ktvName, rs.getString("role"), rs.getString("shift"),
+                        lastCheckin });
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -548,14 +553,15 @@ public class EmployeeRepository {
         List<Object[]> list = new ArrayList<>();
         String sql = "SELECT * FROM employees ORDER BY id ASC";
         try (Connection conn = DatabaseConfig.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
+                Statement stmt = conn.createStatement();
+                ResultSet rs = stmt.executeQuery(sql)) {
             int stt = 1;
             while (rs.next()) {
                 String empId = rs.getString("id");
                 String empName = rs.getString("name");
                 String lastCheckin = getLastCheckinTime(conn, empId, empName);
-                list.add(new Object[]{ stt++, empId, empName, rs.getString("role"), rs.getString("shift"), lastCheckin });
+                list.add(new Object[] { stt++, empId, empName, rs.getString("role"), rs.getString("shift"),
+                        lastCheckin });
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -566,17 +572,17 @@ public class EmployeeRepository {
     public List<Object[]> findKtvAttendanceHistoryByShift(String shift) {
         List<Object[]> list = new ArrayList<>();
         String sql = "SELECT a.id, a.employee_id, a.employee_name, a.check_in_time, a.shift " +
-                     "FROM attendance_logs a " +
-                     "JOIN employees e ON a.employee_id = e.id " +
-                     "WHERE e.shift = ? AND e.role LIKE '%Kỹ Thuật%' " +
-                     "ORDER BY a.check_in_time DESC";
+                "FROM attendance_logs a " +
+                "JOIN employees e ON a.employee_id = e.id " +
+                "WHERE e.shift = ? AND e.role LIKE '%Kỹ Thuật%' " +
+                "ORDER BY a.check_in_time DESC";
         try (Connection conn = DatabaseConfig.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, shift);
             ResultSet rs = pstmt.executeQuery();
             int stt = 1;
             while (rs.next()) {
-                list.add(new Object[]{
+                list.add(new Object[] {
                         stt++,
                         rs.getString("employee_id"),
                         rs.getString("employee_name"),
@@ -593,11 +599,12 @@ public class EmployeeRepository {
     public String getEmployeeShift(String username, String fullName) {
         String sql = "SELECT shift FROM employees WHERE id = ? OR name LIKE ?";
         try (Connection conn = DatabaseConfig.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, username);
             pstmt.setString(2, "%" + fullName + "%");
             ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) return rs.getString("shift");
+            if (rs.next())
+                return rs.getString("shift");
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -610,7 +617,8 @@ public class EmployeeRepository {
             pstmt.setString(1, ktvId);
             pstmt.setString(2, "%" + ktvName + "%");
             ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) return rs.getString("check_in_time");
+            if (rs.next())
+                return rs.getString("check_in_time");
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -620,8 +628,8 @@ public class EmployeeRepository {
     public String generateNextId() {
         String sql = "SELECT id FROM employees WHERE id LIKE 'NV%' ORDER BY CAST(SUBSTRING(id, 3) AS UNSIGNED) DESC LIMIT 1";
         try (Connection conn = DatabaseConfig.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
+                Statement stmt = conn.createStatement();
+                ResultSet rs = stmt.executeQuery(sql)) {
             if (rs.next()) {
                 int lastNum = Integer.parseInt(rs.getString("id").replaceAll("[^0-9]", ""));
                 return String.format("NV%02d", lastNum + 1);

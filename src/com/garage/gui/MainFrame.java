@@ -44,7 +44,6 @@ public class MainFrame extends JFrame {
         tabbedPane.addTab("Quản lý Kho Phụ tùng", createPartPanel());
         tabbedPane.addTab("Gán Dịch vụ & Xuất Hóa đơn", createBillingPanel());
 
-        // Tự động phân bổ KTV cho các lễ tân nếu có KTV chưa được phân công
         employeeRepository.autoAssignUnassignedKtvs();
 
         if (currentRole == Role.ADMIN) {
@@ -63,7 +62,6 @@ public class MainFrame extends JFrame {
         } else {
             tabbedPane.addTab("Lịch Sử Chấm Công Nhóm", createReceptionistAttendancePanel());
 
-            // Kiểm tra thông báo KTV mới được gán cho Lễ tân khi đăng nhập lần đầu
             String recEmpId = employeeRepository.getEmployeeIdByUsernameOrName(currentUsername, currentFullName);
             List<String> unnotifiedKtvs = employeeRepository.getUnnotifiedKtvsForReceptionist(recEmpId);
             if (!unnotifiedKtvs.isEmpty()) {

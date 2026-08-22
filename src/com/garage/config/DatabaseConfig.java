@@ -24,15 +24,13 @@ public class DatabaseConfig {
             e.printStackTrace();
         }
         
-        // Thử mật khẩu cấu hình hiện tại trước
         try {
             return DriverManager.getConnection(DB_URL, USER, PASS);
         } catch (SQLException e) {
-            // Nếu thất bại, thử các mật khẩu phổ biến khác
             for (String p : COMMON_PASSWORDS) {
                 try {
                     Connection c = DriverManager.getConnection(DB_URL, USER, p);
-                    PASS = p; // Lưu mật khẩu đúng để dùng cho các lần sau
+                    PASS = p; 
                     return c;
                 } catch (SQLException ignored) {}
             }

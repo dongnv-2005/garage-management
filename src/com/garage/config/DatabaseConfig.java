@@ -1,7 +1,6 @@
 package com.garage.config;
 
 import java.io.BufferedReader;
-import java.io.FileReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.sql.Connection;
@@ -77,15 +76,38 @@ public class DatabaseConfig {
     private static String readSqlFile(String filePath) {
         StringBuilder builder = new StringBuilder();
         
-        try (InputStream is = DatabaseConfig.class.getClassLoader().getResourceAsStream(filePath);
-             BufferedReader reader = (is != null) 
-                     ? new BufferedReader(new InputStreamReader(is))
-                     : new BufferedReader(new FileReader(filePath))) {
+        InputStream is = DatabaseConfig.class.getClassLoader().getResourceAsStream(filePath);
+        if (is == null) {
+            is = DatabaseConfig.class.getResourceAsStream("/" + filePath);
+        }
+        
+        try {
+            BufferedReader reader = null;
+            if (is != null) {
+                reader = new BufferedReader(new InputStreamReader(is, java.nio.charset.StandardCharsets.UTF_8));
+            } else {
+                java.io.File file = new java.io.File(filePath);
+                if (!file.exists()) {
+                    file = new java.io.File("src", filePath);
+                }
+                if (!file.exists()) {
+                    file = new java.io.File("bin", filePath);
+                }
+                if (file.exists()) {
+                    reader = new BufferedReader(new java.io.InputStreamReader(
+                            new java.io.FileInputStream(file), java.nio.charset.StandardCharsets.UTF_8));
+                } else {
+                    System.err.println("Không tìm thấy file: " + filePath + " (đã tìm trong classpath, ./ và ./src/)");
+                    return null;
+                }
+            }
 
-            String line;
-            while ((line = reader.readLine()) != null) {
-                if (!line.trim().startsWith("--") && !line.trim().startsWith("//")) {
-                    builder.append(line).append("\n");
+            try (BufferedReader r = reader) {
+                String line;
+                while ((line = r.readLine()) != null) {
+                    if (!line.trim().startsWith("--") && !line.trim().startsWith("//")) {
+                        builder.append(line).append("\n");
+                    }
                 }
             }
             return builder.toString();

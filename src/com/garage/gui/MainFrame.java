@@ -12,6 +12,8 @@ import com.garage.services.VehicleManager;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -237,8 +239,29 @@ public class MainFrame extends JFrame {
             }
         });
 
+        JScrollPane custScrollPane = new JScrollPane(table);
+        MouseAdapter custDeselect = new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getSource() == table) {
+                    if (table.rowAtPoint(e.getPoint()) == -1) {
+                        table.clearSelection();
+                        txtName.setText(""); txtPhone.setText("");
+                    }
+                } else {
+                    table.clearSelection();
+                    txtName.setText(""); txtPhone.setText("");
+                }
+            }
+        };
+        table.addMouseListener(custDeselect);
+        custScrollPane.getViewport().addMouseListener(custDeselect);
+        custScrollPane.addMouseListener(custDeselect);
+        panel.addMouseListener(custDeselect);
+        topBar.addMouseListener(custDeselect);
+
         panel.add(topBar, BorderLayout.NORTH);
-        panel.add(new JScrollPane(table), BorderLayout.CENTER);
+        panel.add(custScrollPane, BorderLayout.CENTER);
         return panel;
     }
 
@@ -332,8 +355,30 @@ public class MainFrame extends JFrame {
             }
         });
 
+        JScrollPane vehScrollPane = new JScrollPane(table);
+        MouseAdapter vehDeselect = new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getSource() == table) {
+                    if (table.rowAtPoint(e.getPoint()) == -1) {
+                        table.clearSelection();
+                        txtPlate.setText(""); txtBrand.setText(""); txtModel.setText(""); txtOwnerId.setText("");
+                    }
+                } else {
+                    table.clearSelection();
+                    txtPlate.setText(""); txtBrand.setText(""); txtModel.setText(""); txtOwnerId.setText("");
+                }
+            }
+        };
+        table.addMouseListener(vehDeselect);
+        vehScrollPane.getViewport().addMouseListener(vehDeselect);
+        vehScrollPane.addMouseListener(vehDeselect);
+        panel.addMouseListener(vehDeselect);
+        topBar.addMouseListener(vehDeselect);
+        statusPanel.addMouseListener(vehDeselect);
+
         panel.add(topBar, BorderLayout.NORTH);
-        panel.add(new JScrollPane(table), BorderLayout.CENTER);
+        panel.add(vehScrollPane, BorderLayout.CENTER);
         panel.add(statusPanel, BorderLayout.SOUTH);
         return panel;
     }
@@ -661,6 +706,7 @@ public class MainFrame extends JFrame {
         JButton btnAddEmp = createCustomButton("Thêm NV", new Color(155, 89, 182));
         JButton btnUpdateEmp = createCustomButton("Cập Nhật NV", new Color(230, 126, 34));
         JButton btnDeleteEmp = createCustomButton("Xóa NV", new Color(231, 76, 60));
+        JButton btnClearEmp = createCustomButton("Hủy Chọn / Nhập Mới", new Color(127, 140, 141));
 
         formAdd.add(new JLabel("Tên:")); formAdd.add(txtName);
         formAdd.add(new JLabel("SĐT:")); formAdd.add(txtPhone);
@@ -671,6 +717,7 @@ public class MainFrame extends JFrame {
         formAdd.add(btnAddEmp);
         formAdd.add(btnUpdateEmp);
         formAdd.add(btnDeleteEmp);
+        formAdd.add(btnClearEmp);
 
         JPanel formAction = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
         formAction.setBorder(BorderFactory.createTitledBorder("2. Điểm Danh Hộ & Lịch Sử Chấm Công"));
@@ -695,8 +742,45 @@ public class MainFrame extends JFrame {
         attendanceModel = new DefaultTableModel(new String[] { "Mã Log", "Mã NV", "Họ & Tên", "Thời Gian Chấm Công", "Ca Làm" }, 0);
         JTable attTable = new JTable(attendanceModel);
 
-        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, new JScrollPane(empTable), new JScrollPane(attTable));
+        JScrollPane empScrollPane = new JScrollPane(empTable);
+        JScrollPane attScrollPane = new JScrollPane(attTable);
+
+        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, empScrollPane, attScrollPane);
         splitPane.setResizeWeight(0.55);
+
+        Runnable clearEmpInputs = () -> {
+            empTable.clearSelection();
+            txtName.setText("");
+            txtPhone.setText("");
+            txtCccd.setText("");
+            txtNotes.setText("");
+            cbRole.setSelectedIndex(0);
+            cbShift.setSelectedIndex(0);
+        };
+
+        // Click ra ngoài bảng hoặc khu vực trống để hủy chọn nhân viên và xóa form
+        MouseAdapter deselectMouseAdapter = new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getSource() == empTable) {
+                    if (empTable.rowAtPoint(e.getPoint()) == -1) {
+                        clearEmpInputs.run();
+                    }
+                } else {
+                    clearEmpInputs.run();
+                }
+            }
+        };
+
+        empTable.addMouseListener(deselectMouseAdapter);
+        empScrollPane.getViewport().addMouseListener(deselectMouseAdapter);
+        empScrollPane.addMouseListener(deselectMouseAdapter);
+        panel.addMouseListener(deselectMouseAdapter);
+        topForm.addMouseListener(deselectMouseAdapter);
+        formAdd.addMouseListener(deselectMouseAdapter);
+        formAction.addMouseListener(deselectMouseAdapter);
+
+        btnClearEmp.addActionListener(e -> clearEmpInputs.run());
 
         Runnable reloadEmpCombo = () -> {
             cbAllEmpSelect.removeAllItems();
@@ -707,6 +791,7 @@ public class MainFrame extends JFrame {
         reloadEmpCombo.run();
 
         empTable.getSelectionModel().addListSelectionListener(e -> {
+            if (e.getValueIsAdjusting()) return;
             int row = empTable.getSelectedRow();
             if (row != -1) {
                 txtName.setText((String) employeeModel.getValueAt(row, 1));
@@ -720,18 +805,23 @@ public class MainFrame extends JFrame {
 
         btnAddEmp.addActionListener(e -> {
             String name = txtName.getText().trim();
-            if (name.isEmpty()) { JOptionPane.showMessageDialog(this, "Tên không được rỗng!"); return; }
+            if (name.isEmpty()) { JOptionPane.showMessageDialog(this, "Tên không được rỗng!", "Cảnh báo", JOptionPane.WARNING_MESSAGE); return; }
             try {
                 String newId = employeeRepository.generateNextId();
                 Employee emp = new Employee(newId, name, txtPhone.getText().trim(), txtCccd.getText().trim(), (String) cbRole.getSelectedItem(), (String) cbShift.getSelectedItem(), 0, 0);
                 emp.setNotes(txtNotes.getText().trim());
-                employeeRepository.save(emp);
-                JOptionPane.showMessageDialog(this, "Thêm nhân viên thành công!");
+                String createdUsername = employeeRepository.save(emp);
+
+                String successMsg = "Thêm nhân viên thành công!";
+                if (createdUsername != null) {
+                    successMsg += "\nĐã tự động tạo tài khoản Lễ tân: " + createdUsername + " (Mật khẩu mặc định: 123456)";
+                }
+                JOptionPane.showMessageDialog(this, successMsg, "Thông Báo", JOptionPane.INFORMATION_MESSAGE);
                 txtName.setText(""); txtPhone.setText(""); txtCccd.setText(""); txtNotes.setText("");
                 loadEmployees();
                 reloadEmpCombo.run();
             } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, "Lỗi: " + ex.getMessage());
+                JOptionPane.showMessageDialog(this, "Lỗi: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
             }
         });
 
@@ -908,7 +998,7 @@ public class MainFrame extends JFrame {
                 groupAttHistoryModel.addRow(row);
             }
 
-            for (Object[] row : employeeRepository.findSelfAttendanceLogs(username, fullName)) {
+            for (Object[] row : employeeRepository.findSelfAttendanceLogs(recEmpId, username)) {
                 selfAttHistoryModel.addRow(row);
             }
         };

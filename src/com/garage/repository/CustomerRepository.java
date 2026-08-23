@@ -43,25 +43,58 @@ public class CustomerRepository {
         return list;
     }
 
+    public String checkDuplicatePhone(Connection conn, String phone, String excludeId) throws SQLException {
+        if (phone == null || phone.trim().isEmpty() || "---".equals(phone.trim())) {
+            return null;
+        }
+        String sql = (excludeId != null && !excludeId.isEmpty())
+                ? "SELECT id, name FROM customers WHERE phone = ? AND id != ? LIMIT 1"
+                : "SELECT id, name FROM customers WHERE phone = ? LIMIT 1";
+        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, phone.trim());
+            if (excludeId != null && !excludeId.isEmpty()) {
+                pstmt.setString(2, excludeId);
+            }
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("id") + " - " + rs.getString("name");
+                }
+            }
+        }
+        return null;
+    }
+
     public void save(Customer customer) throws SQLException {
-        String sql = "INSERT INTO customers (id, name, phone) VALUES (?, ?, ?)";
-        try (Connection conn = DatabaseConfig.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, customer.getId());
-            pstmt.setString(2, customer.getName());
-            pstmt.setString(3, customer.getPhone().isEmpty() ? "---" : customer.getPhone());
-            pstmt.executeUpdate();
+        try (Connection conn = DatabaseConfig.getConnection()) {
+            String dupPhone = checkDuplicatePhone(conn, customer.getPhone(), null);
+            if (dupPhone != null) {
+                throw new SQLException("Số điện thoại '" + customer.getPhone() + "' đã thuộc về khách hàng: " + dupPhone + "!");
+            }
+
+            String sql = "INSERT INTO customers (id, name, phone) VALUES (?, ?, ?)";
+            try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                pstmt.setString(1, customer.getId());
+                pstmt.setString(2, customer.getName());
+                pstmt.setString(3, customer.getPhone().isEmpty() ? "---" : customer.getPhone());
+                pstmt.executeUpdate();
+            }
         }
     }
 
     public void update(Customer customer) throws SQLException {
-        String sql = "UPDATE customers SET name = ?, phone = ? WHERE id = ?";
-        try (Connection conn = DatabaseConfig.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, customer.getName());
-            pstmt.setString(2, customer.getPhone().isEmpty() ? "---" : customer.getPhone());
-            pstmt.setString(3, customer.getId());
-            pstmt.executeUpdate();
+        try (Connection conn = DatabaseConfig.getConnection()) {
+            String dupPhone = checkDuplicatePhone(conn, customer.getPhone(), customer.getId());
+            if (dupPhone != null) {
+                throw new SQLException("Số điện thoại '" + customer.getPhone() + "' đã thuộc về khách hàng: " + dupPhone + "!");
+            }
+
+            String sql = "UPDATE customers SET name = ?, phone = ? WHERE id = ?";
+            try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                pstmt.setString(1, customer.getName());
+                pstmt.setString(2, customer.getPhone().isEmpty() ? "---" : customer.getPhone());
+                pstmt.setString(3, customer.getId());
+                pstmt.executeUpdate();
+            }
         }
     }
 

@@ -13,6 +13,7 @@ public class Main {
 
         DatabaseConfig.initDatabase();
 
+        
         SwingUtilities.invokeLater(() -> {
             new LoginFrame().setVisible(true);
         });

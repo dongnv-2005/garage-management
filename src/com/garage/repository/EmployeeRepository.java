@@ -131,10 +131,11 @@ public class EmployeeRepository {
         }
 
         if (receptionists.isEmpty()) {
-            String shiftKeyword = shift.contains("1") ? "%1%" : (shift.contains("2") ? "%2%" : "%");
-            String sqlFallback = "SELECT id FROM employees WHERE role LIKE '%Lễ Tân%' AND shift LIKE ?";
+            String shiftKeyword = shift.contains("1") ? "%1%" : (shift.contains("2") ? "%2%" : "%" + shift + "%");
+            String sqlFallback = "SELECT id FROM employees WHERE role LIKE '%Lễ Tân%' AND (shift LIKE ? OR shift = ?)";
             try (PreparedStatement pstmt = conn.prepareStatement(sqlFallback)) {
                 pstmt.setString(1, shiftKeyword);
+                pstmt.setString(2, shift);
                 ResultSet rs = pstmt.executeQuery();
                 while (rs.next()) {
                     receptionists.add(rs.getString("id"));
@@ -144,22 +145,11 @@ public class EmployeeRepository {
             }
         }
 
-        if (receptionists.isEmpty()) {
-            String sqlAll = "SELECT id FROM employees WHERE role LIKE '%Lễ Tân%'";
-            try (Statement stmt = conn.createStatement();
-                    ResultSet rs = stmt.executeQuery(sqlAll)) {
-                while (rs.next()) {
-                    receptionists.add(rs.getString("id"));
-                }
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-        }
-
+        // Tuyệt đối không gán sang Lễ tân ca khác nếu ca hiện tại chưa có Lễ tân
         if (receptionists.isEmpty())
             return null;
 
-        java.util.Map<String, Integer> counts = new java.util.HashMap<>();
+        String bestRecId = receptionists.get(0);
         int minCount = Integer.MAX_VALUE;
         for (String recId : receptionists) {
             int count = 0;
@@ -172,25 +162,12 @@ public class EmployeeRepository {
             } catch (SQLException e) {
                 e.printStackTrace();
             }
-            counts.put(recId, count);
             if (count < minCount) {
                 minCount = count;
+                bestRecId = recId;
             }
         }
-
-        List<String> minCandidates = new ArrayList<>();
-        for (java.util.Map.Entry<String, Integer> entry : counts.entrySet()) {
-            if (entry.getValue() == minCount) {
-                minCandidates.add(entry.getKey());
-            }
-        }
-
-        if (minCandidates.size() == 1) {
-            return minCandidates.get(0);
-        } else if (!minCandidates.isEmpty()) {
-            return minCandidates.get(new java.util.Random().nextInt(minCandidates.size()));
-        }
-        return receptionists.get(0);
+        return bestRecId;
     }
 
     public void rebalanceKtvsForShift(Connection conn, String shift) {
@@ -214,36 +191,49 @@ public class EmployeeRepository {
                 }
             }
 
-            List<String> ktvs = new ArrayList<>();
-            String ktvSql = "SELECT id FROM employees WHERE role LIKE '%Kỹ Thuật%' AND (shift = ? OR shift LIKE ?) ORDER BY id ASC";
+            if (receptionists.isEmpty()) {
+                // Nếu ca này chưa có Lễ tân, hủy gán để tránh KTV bị gán nhầm sang Lễ tân ca khác
+                String clearSql = "UPDATE employees SET managed_by = NULL WHERE (shift = ? OR shift LIKE ?) AND role LIKE '%Kỹ Thuật%'";
+                try (PreparedStatement pstmt = conn.prepareStatement(clearSql)) {
+                    pstmt.setString(1, shift);
+                    pstmt.setString(2, shiftLike);
+                    pstmt.executeUpdate();
+                }
+                return;
+            }
+
+            // Chỉ tìm các KTV trong ca CHƯA ĐƯỢC PHÂN CÔNG (managed_by IS NULL hoặc đang trỏ tới Lễ tân không thuộc ca này)
+            // Lễ tân cũ thì GIỮ NGUYÊN các KTV đã có, tuyệt đối không xáo trộn lại!
+            List<String> unassignedKtvs = new ArrayList<>();
+            String ktvSql = "SELECT id, managed_by FROM employees WHERE role LIKE '%Kỹ Thuật%' AND (shift = ? OR shift LIKE ?) ORDER BY id ASC";
             try (PreparedStatement pstmt = conn.prepareStatement(ktvSql)) {
                 pstmt.setString(1, shift);
                 pstmt.setString(2, shiftLike);
                 try (ResultSet rs = pstmt.executeQuery()) {
                     while (rs.next()) {
-                        String id = rs.getString("id");
-                        if (!ktvs.contains(id)) {
-                            ktvs.add(id);
+                        String ktvId = rs.getString("id");
+                        String managedBy = rs.getString("managed_by");
+                        if (managedBy == null || managedBy.trim().isEmpty() || !receptionists.contains(managedBy)) {
+                            unassignedKtvs.add(ktvId);
                         }
                     }
                 }
             }
 
-            if (receptionists.isEmpty() || ktvs.isEmpty()) {
+            if (unassignedKtvs.isEmpty()) {
                 return;
             }
 
-            // Trộn ngẫu nhiên danh sách KTV trong ca để phân công công bằng và ngẫu nhiên
-            java.util.Collections.shuffle(ktvs, new java.util.Random());
-
-            // Phân bổ KTV cho các Lễ tân trong cùng ca
-            String updateSql = "UPDATE employees SET managed_by = ?, is_notified = TRUE WHERE id = ?";
+            // Phân công từng KTV chưa gán cho Lễ tân đang có ít KTV nhất trong ca (cố định, không random)
+            String updateSql = "UPDATE employees SET managed_by = ?, is_notified = FALSE WHERE id = ?";
             try (PreparedStatement pstmt = conn.prepareStatement(updateSql)) {
-                for (int i = 0; i < ktvs.size(); i++) {
-                    String assignedRecId = receptionists.get(i % receptionists.size());
-                    pstmt.setString(1, assignedRecId);
-                    pstmt.setString(2, ktvs.get(i));
-                    pstmt.executeUpdate();
+                for (String ktvId : unassignedKtvs) {
+                    String bestRecId = findBestReceptionistForKtv(conn, shift);
+                    if (bestRecId != null) {
+                        pstmt.setString(1, bestRecId);
+                        pstmt.setString(2, ktvId);
+                        pstmt.executeUpdate();
+                    }
                 }
             }
         } catch (SQLException e) {
@@ -254,6 +244,18 @@ public class EmployeeRepository {
     public void autoAssignUnassignedKtvs() {
         try (Connection conn = DatabaseConfig.getConnection()) {
             ensureAssignmentColumnsExist(conn);
+
+            // Tự động xóa liên kết phân công sai ca (KTV ca 1 gán cho Lễ tân ca 2 hoặc ngược lại)
+            String cleanCrossShiftSql = 
+                "UPDATE employees k " +
+                "JOIN employees r ON k.managed_by = r.id " +
+                "SET k.managed_by = NULL " +
+                "WHERE k.role LIKE '%Kỹ Thuật%' AND r.role LIKE '%Lễ Tân%' " +
+                "AND ((k.shift LIKE '%1%' AND r.shift NOT LIKE '%1%') OR (k.shift LIKE '%2%' AND r.shift NOT LIKE '%2%'))";
+            try (Statement stmt = conn.createStatement()) {
+                stmt.executeUpdate(cleanCrossShiftSql);
+            }
+
             rebalanceKtvsForShift(conn, "Ca 1 (06:00 - 14:00)");
             rebalanceKtvsForShift(conn, "Ca 2 (14:00 - 22:00)");
         } catch (SQLException e) {
@@ -491,7 +493,8 @@ public class EmployeeRepository {
             }
 
             if (employee.getRole() != null && (employee.getRole().toLowerCase().contains("lễ tân") || employee.getRole().toLowerCase().contains("kỹ thuật"))) {
-                rebalanceKtvsForShift(conn, employee.getShift());
+                rebalanceKtvsForShift(conn, "Ca 1 (06:00 - 14:00)");
+                rebalanceKtvsForShift(conn, "Ca 2 (14:00 - 22:00)");
             }
 
             return createdUsername;
@@ -526,7 +529,8 @@ public class EmployeeRepository {
             }
 
             if (employee.getRole() != null && (employee.getRole().toLowerCase().contains("lễ tân") || employee.getRole().toLowerCase().contains("kỹ thuật"))) {
-                rebalanceKtvsForShift(conn, employee.getShift());
+                rebalanceKtvsForShift(conn, "Ca 1 (06:00 - 14:00)");
+                rebalanceKtvsForShift(conn, "Ca 2 (14:00 - 22:00)");
             }
         }
     }
@@ -552,8 +556,9 @@ public class EmployeeRepository {
                 pstmt.executeUpdate();
             }
 
-            if (role != null && (role.toLowerCase().contains("lễ tân") || role.toLowerCase().contains("kỹ thuật")) && shift != null) {
-                rebalanceKtvsForShift(conn, shift);
+            if (role != null && (role.toLowerCase().contains("lễ tân") || role.toLowerCase().contains("kỹ thuật"))) {
+                rebalanceKtvsForShift(conn, "Ca 1 (06:00 - 14:00)");
+                rebalanceKtvsForShift(conn, "Ca 2 (14:00 - 22:00)");
             }
         }
     }
@@ -686,10 +691,13 @@ public class EmployeeRepository {
 
     public List<Object[]> findGroupKtvByReceptionist(String receptionistId, String fallbackShift) {
         List<Object[]> list = new ArrayList<>();
-        String sql = "SELECT * FROM employees WHERE managed_by = ? AND role LIKE '%Kỹ Thuật%' ORDER BY id ASC";
+        String shiftKeyword = (fallbackShift != null && fallbackShift.contains("1")) ? "%1%" : ((fallbackShift != null && fallbackShift.contains("2")) ? "%2%" : "%");
+        String sql = "SELECT * FROM employees WHERE managed_by = ? AND role LIKE '%Kỹ Thuật%' AND (shift LIKE ? OR shift = ?) ORDER BY id ASC";
         try (Connection conn = DatabaseConfig.getConnection()) {
             try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
                 pstmt.setString(1, receptionistId);
+                pstmt.setString(2, shiftKeyword);
+                pstmt.setString(3, fallbackShift != null ? fallbackShift : "");
                 try (ResultSet rs = pstmt.executeQuery()) {
                     int stt = 1;
                     while (rs.next()) {
@@ -705,6 +713,8 @@ public class EmployeeRepository {
                 rebalanceKtvsForShift(conn, fallbackShift);
                 try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
                     pstmt.setString(1, receptionistId);
+                    pstmt.setString(2, shiftKeyword);
+                    pstmt.setString(3, fallbackShift);
                     try (ResultSet rs = pstmt.executeQuery()) {
                         int stt = 1;
                         while (rs.next()) {
@@ -724,14 +734,17 @@ public class EmployeeRepository {
 
     public List<Object[]> findKtvAttendanceHistoryByReceptionist(String receptionistId, String fallbackShift) {
         List<Object[]> list = new ArrayList<>();
+        String shiftKeyword = (fallbackShift != null && fallbackShift.contains("1")) ? "%1%" : ((fallbackShift != null && fallbackShift.contains("2")) ? "%2%" : "%");
         String sql = "SELECT a.id, a.employee_id, a.employee_name, a.check_in_time, a.shift " +
                 "FROM attendance_logs a " +
                 "JOIN employees e ON a.employee_id = e.id " +
-                "WHERE e.managed_by = ? AND e.role LIKE '%Kỹ Thuật%' " +
+                "WHERE e.managed_by = ? AND e.role LIKE '%Kỹ Thuật%' AND (e.shift LIKE ? OR e.shift = ?) " +
                 "ORDER BY a.check_in_time DESC";
         try (Connection conn = DatabaseConfig.getConnection();
                 PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, receptionistId);
+            pstmt.setString(2, shiftKeyword);
+            pstmt.setString(3, fallbackShift != null ? fallbackShift : "");
             try (ResultSet rs = pstmt.executeQuery()) {
                 int stt = 1;
                 while (rs.next()) {

@@ -25,6 +25,8 @@ public class MainFrame extends JFrame {
     private final EmployeeRepository employeeRepository = new EmployeeRepository();
 
     private DefaultTableModel customerModel, vehicleModel, partModel, partUsageModel, employeeModel, attendanceModel, invoiceHistoryModel;
+    private DefaultTableModel receptionistGroupKtvModel, receptionistGroupAttHistoryModel, receptionistSelfAttHistoryModel;
+    private JComboBox<String> cbBillingLicensePlate, cbBillingPartSelect, cbAdminEmpSelect, cbReceptionistKtvSelect;
     private BaseReportPanel summaryReportPanel, chartReportPanel;
 
     public MainFrame() {
@@ -60,6 +62,15 @@ public class MainFrame extends JFrame {
             reportSubTabs.addTab("Thống Kê Tổng Quan (Bảng)", summaryReportPanel);
             reportSubTabs.addTab("Doanh Thu Theo Dịch Vụ (Biểu Đồ)", chartReportPanel);
 
+            reportSubTabs.addChangeListener(e -> {
+                int idx = reportSubTabs.getSelectedIndex();
+                if (idx == 0 && summaryReportPanel != null) {
+                    summaryReportPanel.reloadReport();
+                } else if (idx == 1 && chartReportPanel != null) {
+                    chartReportPanel.reloadReport();
+                }
+            });
+
             tabbedPane.addTab("Báo cáo Doanh thu & Thống kê", reportSubTabs);
         } else {
             tabbedPane.addTab("Lịch Sử Chấm Công Nhóm", createReceptionistAttendancePanel());
@@ -80,6 +91,33 @@ public class MainFrame extends JFrame {
                 });
             }
         }
+
+        tabbedPane.addChangeListener(e -> {
+            int selectedIndex = tabbedPane.getSelectedIndex();
+            if (selectedIndex < 0) return;
+            String tabTitle = tabbedPane.getTitleAt(selectedIndex);
+
+            if ("Quản lý Khách hàng".equals(tabTitle)) {
+                loadCustomers();
+            } else if ("Tiếp nhận & Trạng thái Xe".equals(tabTitle)) {
+                loadVehicles();
+            } else if ("Quản lý Kho Phụ tùng".equals(tabTitle)) {
+                loadParts();
+                loadPartUsageLogs();
+            } else if ("Gán Dịch vụ & Xuất Hóa đơn".equals(tabTitle)) {
+                loadInvoiceHistory();
+                reloadPlateCombo();
+                reloadPartCombo();
+            } else if ("Quản lý Nhân sự & Chấm công".equals(tabTitle)) {
+                loadEmployees();
+                loadAttendanceLogs();
+                reloadEmpCombo();
+            } else if ("Báo cáo Doanh thu & Thống kê".equals(tabTitle)) {
+                loadReportData();
+            } else if ("Lịch Sử Chấm Công Nhóm".equals(tabTitle)) {
+                loadGroupData();
+            }
+        });
 
         int totalTabs = tabbedPane.getTabCount();
         for (int i = 0; i < totalTabs; i++) {
@@ -113,6 +151,8 @@ public class MainFrame extends JFrame {
                             "Ngày: " + dateStr + "\n" +
                             "Giờ: " + timeStr);
                     loadAttendanceLogs();
+                    loadEmployees();
+                    loadGroupData();
                 } else {
                     JOptionPane.showMessageDialog(this, "Không tìm thấy nhân viên!");
                 }
@@ -122,7 +162,12 @@ public class MainFrame extends JFrame {
         });
 
         JButton btnAccount = createCustomButton("Tài Khoản", new Color(52, 152, 219));
-        btnAccount.addActionListener(e -> new AccountManagementDialog(this).setVisible(true));
+        btnAccount.addActionListener(e -> {
+            new AccountManagementDialog(this).setVisible(true);
+            User updatedUser = AuthService.getCurrentUser();
+            lblUser.setText("Xin chào: " + updatedUser.getFullName() + " (" + updatedUser.getRole().getDescription() + ")");
+            setTitle("HỆ THỐNG QUẢN LÝ GARA Ô TÔ - [" + updatedUser.getFullName() + " - " + updatedUser.getRole().getDescription() + "]");
+        });
 
         JButton btnLogout = createCustomButton("Đăng Xuất", new Color(231, 76, 60));
         btnLogout.addActionListener(e -> {
@@ -145,10 +190,16 @@ public class MainFrame extends JFrame {
         loadVehicles();
         loadParts();
         loadPartUsageLogs();
+        loadInvoiceHistory();
+        reloadPlateCombo();
+        reloadPartCombo();
         if (currentRole == Role.ADMIN) {
             loadEmployees();
             loadAttendanceLogs();
+            reloadEmpCombo();
             loadReportData();
+        } else {
+            loadGroupData();
         }
     }
 
@@ -479,7 +530,7 @@ public class MainFrame extends JFrame {
         JPanel line1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
         line1.setBorder(BorderFactory.createTitledBorder("1. Tạo Hóa Đơn Mới"));
 
-        JComboBox<String> cbLicensePlate = new JComboBox<>();
+        cbBillingLicensePlate = new JComboBox<>();
         JComboBox<String> cbServiceType = new JComboBox<>(new String[]{
                 "Rửa xe & Dọn nội thất (30.000đ)",
                 "Thay dầu & Lọc dầu (150.000đ)",
@@ -489,7 +540,7 @@ public class MainFrame extends JFrame {
                 "Thay thế phụ tùng kho"
         });
 
-        JComboBox<String> cbPartSelect = new JComboBox<>();
+        cbBillingPartSelect = new JComboBox<>();
         JTextField txtPartQty = new JTextField("1", 3);
         JTextField txtNotes = new JTextField(12);
         JTextField txtAmount = new JTextField(8);
@@ -497,14 +548,14 @@ public class MainFrame extends JFrame {
         txtAmount.setEditable(false);
         txtAmount.setText("30000");
 
-        cbPartSelect.setEnabled(false);
+        cbBillingPartSelect.setEnabled(false);
         txtPartQty.setEnabled(false);
 
         JButton btnInvoice = createCustomButton("Tạo & In Hóa Đơn", new Color(52, 152, 219));
 
-        line1.add(new JLabel("Biển số xe:")); line1.add(cbLicensePlate);
+        line1.add(new JLabel("Biển số xe:")); line1.add(cbBillingLicensePlate);
         line1.add(new JLabel("Dịch vụ:")); line1.add(cbServiceType);
-        line1.add(new JLabel("Phụ tùng Kho:")); line1.add(cbPartSelect);
+        line1.add(new JLabel("Phụ tùng Kho:")); line1.add(cbBillingPartSelect);
         line1.add(new JLabel("SL:")); line1.add(txtPartQty);
         line1.add(new JLabel("Ghi chú:")); line1.add(txtNotes);
         line1.add(new JLabel("Tổng tiền:")); line1.add(txtAmount);
@@ -530,25 +581,12 @@ public class MainFrame extends JFrame {
         invoiceHistoryModel = new DefaultTableModel(new String[] { "Mã HĐ", "Biển Số Xe", "Tên Khách Hàng", "Loại Dịch Vụ", "Thông Tin Phụ Tùng", "Ghi Chú", "Người Tạo", "Tổng Tiền", "Thời Gian" }, 0);
         JTable historyTable = new JTable(invoiceHistoryModel);
 
-        Runnable reloadPlateCombo = () -> {
-            cbLicensePlate.removeAllItems();
-            for (Vehicle v : vehicleManager.getAllVehicles()) {
-                cbLicensePlate.addItem(v.getLicensePlate() + " (" + v.getOwnerName() + ")");
-            }
-        };
-        reloadPlateCombo.run();
-
-        Runnable reloadPartCombo = () -> {
-            cbPartSelect.removeAllItems();
-            for (Part p : billingManager.getAllParts()) {
-                cbPartSelect.addItem(p.getId() + " - " + p.getName() + " (" + String.format("%,.0f", p.getExportPrice()) + "đ/Kho:" + p.getStockQuantity() + ")");
-            }
-        };
-        reloadPartCombo.run();
+        reloadPlateCombo();
+        reloadPartCombo();
 
         Runnable autoCalculatePartPrice = () -> {
             if ("Thay thế phụ tùng kho".equals(cbServiceType.getSelectedItem())) {
-                String selectedPart = (String) cbPartSelect.getSelectedItem();
+                String selectedPart = (String) cbBillingPartSelect.getSelectedItem();
                 if (selectedPart != null && !selectedPart.isEmpty()) {
                     String partId = selectedPart.split(" - ")[0];
                     Part p = billingManager.getAllParts().stream().filter(item -> item.getId().equals(partId)).findFirst().orElse(null);
@@ -568,11 +606,11 @@ public class MainFrame extends JFrame {
             String selected = (String) cbServiceType.getSelectedItem();
             if (selected == null) return;
             boolean isPart = "Thay thế phụ tùng kho".equals(selected);
-            cbPartSelect.setEnabled(isPart);
+            cbBillingPartSelect.setEnabled(isPart);
             txtPartQty.setEnabled(isPart);
 
             if (isPart) {
-                reloadPartCombo.run();
+                reloadPartCombo();
                 autoCalculatePartPrice.run();
             } else {
                 if (selected.contains("Thay dầu")) {
@@ -593,19 +631,19 @@ public class MainFrame extends JFrame {
             }
         });
 
-        cbPartSelect.addActionListener(e -> autoCalculatePartPrice.run());
+        cbBillingPartSelect.addActionListener(e -> autoCalculatePartPrice.run());
         txtPartQty.addKeyListener(new java.awt.event.KeyAdapter() {
             public void keyReleased(java.awt.event.KeyEvent evt) { autoCalculatePartPrice.run(); }
         });
 
         btnInvoice.addActionListener(e -> {
-            String selectedPlateItem = (String) cbLicensePlate.getSelectedItem();
+            String selectedPlateItem = (String) cbBillingLicensePlate.getSelectedItem();
             if (selectedPlateItem == null || selectedPlateItem.isEmpty()) {
                 JOptionPane.showMessageDialog(this, "Chưa chọn xe!"); return;
             }
             String plate = selectedPlateItem.split(" ")[0];
             String serviceType = (String) cbServiceType.getSelectedItem();
-            String selectedPartRaw = (String) cbPartSelect.getSelectedItem();
+            String selectedPartRaw = (String) cbBillingPartSelect.getSelectedItem();
             
             int partQty = 1;
             try {
@@ -628,8 +666,8 @@ public class MainFrame extends JFrame {
                 loadParts();
                 loadPartUsageLogs();
                 loadInvoiceHistory();
-                reloadPartCombo.run();
-                reloadPlateCombo.run();
+                reloadPartCombo();
+                reloadPlateCombo();
                 loadReportData();
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(this, "Lỗi: " + ex.getMessage());
@@ -648,7 +686,8 @@ public class MainFrame extends JFrame {
         btnReloadInv.addActionListener(e -> {
             txtSearchInvoice.setText("");
             loadInvoiceHistory();
-            reloadPlateCombo.run();
+            reloadPlateCombo();
+            reloadPartCombo();
         });
 
         btnDeleteInv.addActionListener(e -> {
@@ -667,6 +706,7 @@ public class MainFrame extends JFrame {
                     loadParts();
                     loadPartUsageLogs();
                     loadReportData();
+                    reloadPartCombo();
                 } catch (Exception ex) {
                     JOptionPane.showMessageDialog(this, "Lỗi xóa hóa đơn: " + ex.getMessage());
                 }
@@ -678,6 +718,48 @@ public class MainFrame extends JFrame {
 
         loadInvoiceHistory();
         return panel;
+    }
+
+    private void reloadPlateCombo() {
+        if (cbBillingLicensePlate == null) return;
+        String prevSelected = (String) cbBillingLicensePlate.getSelectedItem();
+        String prevPlate = prevSelected != null && prevSelected.contains(" ") ? prevSelected.split(" ")[0] : null;
+
+        cbBillingLicensePlate.removeAllItems();
+        int selectedIndex = -1;
+        List<Vehicle> vehicles = vehicleManager.getAllVehicles();
+        for (int i = 0; i < vehicles.size(); i++) {
+            Vehicle v = vehicles.get(i);
+            String item = v.getLicensePlate() + " (" + v.getOwnerName() + ")";
+            cbBillingLicensePlate.addItem(item);
+            if (prevPlate != null && v.getLicensePlate().equalsIgnoreCase(prevPlate)) {
+                selectedIndex = i;
+            }
+        }
+        if (selectedIndex >= 0) {
+            cbBillingLicensePlate.setSelectedIndex(selectedIndex);
+        }
+    }
+
+    private void reloadPartCombo() {
+        if (cbBillingPartSelect == null) return;
+        String prevSelected = (String) cbBillingPartSelect.getSelectedItem();
+        String prevPartId = prevSelected != null && prevSelected.contains(" - ") ? prevSelected.split(" - ")[0] : null;
+
+        cbBillingPartSelect.removeAllItems();
+        int selectedIndex = -1;
+        List<Part> parts = billingManager.getAllParts();
+        for (int i = 0; i < parts.size(); i++) {
+            Part p = parts.get(i);
+            String item = p.getId() + " - " + p.getName() + " (" + String.format("%,.0f", p.getExportPrice()) + "đ/Kho:" + p.getStockQuantity() + ")";
+            cbBillingPartSelect.addItem(item);
+            if (prevPartId != null && p.getId().equalsIgnoreCase(prevPartId)) {
+                selectedIndex = i;
+            }
+        }
+        if (selectedIndex >= 0) {
+            cbBillingPartSelect.setSelectedIndex(selectedIndex);
+        }
     }
 
     private void loadInvoiceHistory() {
@@ -722,13 +804,13 @@ public class MainFrame extends JFrame {
         JPanel formAction = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
         formAction.setBorder(BorderFactory.createTitledBorder("2. Điểm Danh Hộ & Lịch Sử Chấm Công"));
 
-        JComboBox<String> cbAllEmpSelect = new JComboBox<>();
+        cbAdminEmpSelect = new JComboBox<>();
         JButton btnAdminCheckin = createCustomButton("Điểm Danh Hộ Nhân Viên", new Color(46, 204, 113));
         JButton btnResetPassword = createCustomButton("Reset Mật Khẩu (123456)", new Color(52, 152, 219));
         JButton btnDeleteAttendance = createCustomButton("Xóa Lịch Sử Chấm Công Chọn", new Color(192, 57, 43));
 
         formAction.add(new JLabel("Chọn Nhân Viên:"));
-        formAction.add(cbAllEmpSelect);
+        formAction.add(cbAdminEmpSelect);
         formAction.add(btnAdminCheckin);
         formAction.add(btnResetPassword);
         formAction.add(btnDeleteAttendance);
@@ -782,13 +864,7 @@ public class MainFrame extends JFrame {
 
         btnClearEmp.addActionListener(e -> clearEmpInputs.run());
 
-        Runnable reloadEmpCombo = () -> {
-            cbAllEmpSelect.removeAllItems();
-            for (Employee emp : employeeRepository.findAll()) {
-                cbAllEmpSelect.addItem(emp.getId() + " - " + emp.getName() + " (" + emp.getRole() + ")");
-            }
-        };
-        reloadEmpCombo.run();
+        reloadEmpCombo();
 
         empTable.getSelectionModel().addListSelectionListener(e -> {
             if (e.getValueIsAdjusting()) return;
@@ -819,7 +895,7 @@ public class MainFrame extends JFrame {
                 JOptionPane.showMessageDialog(this, successMsg, "Thông Báo", JOptionPane.INFORMATION_MESSAGE);
                 txtName.setText(""); txtPhone.setText(""); txtCccd.setText(""); txtNotes.setText("");
                 loadEmployees();
-                reloadEmpCombo.run();
+                reloadEmpCombo();
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(this, "Lỗi: " + ex.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
             }
@@ -835,7 +911,7 @@ public class MainFrame extends JFrame {
                 employeeRepository.update(emp);
                 JOptionPane.showMessageDialog(this, "Cập nhật nhân viên thành công!");
                 loadEmployees();
-                reloadEmpCombo.run();
+                reloadEmpCombo();
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(this, "Lỗi cập nhật: " + ex.getMessage());
             }
@@ -855,7 +931,7 @@ public class MainFrame extends JFrame {
                     employeeRepository.delete(empId);
                     JOptionPane.showMessageDialog(this, "Đã xóa nhân viên!");
                     loadEmployees();
-                    reloadEmpCombo.run();
+                    reloadEmpCombo();
                 } catch (Exception ex) {
                     JOptionPane.showMessageDialog(this, "Lỗi xóa: " + ex.getMessage());
                 }
@@ -863,7 +939,7 @@ public class MainFrame extends JFrame {
         });
 
         btnAdminCheckin.addActionListener(e -> {
-            String selectedItem = (String) cbAllEmpSelect.getSelectedItem();
+            String selectedItem = (String) cbAdminEmpSelect.getSelectedItem();
             if (selectedItem == null || selectedItem.isEmpty()) return;
             String targetEmpId = selectedItem.split(" - ")[0];
             String targetEmpName = selectedItem.split(" - ")[1].split(" \\(")[0];
@@ -887,7 +963,7 @@ public class MainFrame extends JFrame {
         });
 
         btnResetPassword.addActionListener(e -> {
-            String selectedItem = (String) cbAllEmpSelect.getSelectedItem();
+            String selectedItem = (String) cbAdminEmpSelect.getSelectedItem();
             if (selectedItem == null || selectedItem.isEmpty()) return;
             String targetEmpId = selectedItem.split(" - ")[0];
             try {
@@ -926,6 +1002,27 @@ public class MainFrame extends JFrame {
         return panel;
     }
 
+    private void reloadEmpCombo() {
+        if (cbAdminEmpSelect == null) return;
+        String prevSelected = (String) cbAdminEmpSelect.getSelectedItem();
+        String prevEmpId = prevSelected != null && prevSelected.contains(" - ") ? prevSelected.split(" - ")[0] : null;
+
+        cbAdminEmpSelect.removeAllItems();
+        int selectedIndex = -1;
+        List<Employee> employees = employeeRepository.findAll();
+        for (int i = 0; i < employees.size(); i++) {
+            Employee emp = employees.get(i);
+            String item = emp.getId() + " - " + emp.getName() + " (" + emp.getRole() + ")";
+            cbAdminEmpSelect.addItem(item);
+            if (prevEmpId != null && emp.getId().equalsIgnoreCase(prevEmpId)) {
+                selectedIndex = i;
+            }
+        }
+        if (selectedIndex >= 0) {
+            cbAdminEmpSelect.setSelectedIndex(selectedIndex);
+        }
+    }
+
     private void loadEmployees() {
         if (employeeModel == null) return;
         employeeModel.setRowCount(0);
@@ -954,21 +1051,21 @@ public class MainFrame extends JFrame {
         JPanel topBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
         topBar.setBorder(BorderFactory.createTitledBorder("Điểm Danh / Chấm Công Hộ Kỹ Thuật Viên Làm Cùng Ca"));
 
-        JComboBox<String> cbKtvSelect = new JComboBox<>();
+        cbReceptionistKtvSelect = new JComboBox<>();
         JButton btnCheckinKtv = createCustomButton("Điểm Danh KTV", new Color(46, 204, 113));
 
         topBar.add(new JLabel("Chọn KTV Cùng Ca:"));
-        topBar.add(cbKtvSelect);
+        topBar.add(cbReceptionistKtvSelect);
         topBar.add(btnCheckinKtv);
 
-        DefaultTableModel groupKtvModel = new DefaultTableModel(new String[] { "STT", "Mã NV", "Họ & Tên KTV", "Chức Danh", "Ca Phân Công", "Lần Chấm Công Gần Nhất" }, 0);
-        JTable ktvTable = new JTable(groupKtvModel);
+        receptionistGroupKtvModel = new DefaultTableModel(new String[] { "STT", "Mã NV", "Họ & Tên KTV", "Chức Danh", "Ca Phân Công", "Lần Chấm Công Gần Nhất" }, 0);
+        JTable ktvTable = new JTable(receptionistGroupKtvModel);
 
-        DefaultTableModel groupAttHistoryModel = new DefaultTableModel(new String[] { "STT", "Mã KTV", "Họ & Tên KTV", "Thời Gian Chấm Công", "Ca Làm" }, 0);
-        JTable historyTable = new JTable(groupAttHistoryModel);
+        receptionistGroupAttHistoryModel = new DefaultTableModel(new String[] { "STT", "Mã KTV", "Họ & Tên KTV", "Thời Gian Chấm Công", "Ca Làm" }, 0);
+        JTable historyTable = new JTable(receptionistGroupAttHistoryModel);
 
-        DefaultTableModel selfAttHistoryModel = new DefaultTableModel(new String[] { "STT", "Mã NV", "Họ & Tên Lễ Tân", "Thời Gian Chấm Công", "Ca Làm" }, 0);
-        JTable selfHistoryTable = new JTable(selfAttHistoryModel);
+        receptionistSelfAttHistoryModel = new DefaultTableModel(new String[] { "STT", "Mã NV", "Họ & Tên Lễ Tân", "Thời Gian Chấm Công", "Ca Làm" }, 0);
+        JTable selfHistoryTable = new JTable(receptionistSelfAttHistoryModel);
 
         JSplitPane splitKtvPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, new JScrollPane(ktvTable), new JScrollPane(historyTable));
         splitKtvPane.setResizeWeight(0.5);
@@ -976,39 +1073,14 @@ public class MainFrame extends JFrame {
         JTabbedPane attendanceSubTabs = new JTabbedPane();
         attendanceSubTabs.addTab("Chấm Công Nhóm KTV", splitKtvPane);
         attendanceSubTabs.addTab("Lịch Sử Tự Chấm Công Của Bạn", new JScrollPane(selfHistoryTable));
-
-        Runnable loadGroupData = () -> {
-            groupKtvModel.setRowCount(0);
-            groupAttHistoryModel.setRowCount(0);
-            selfAttHistoryModel.setRowCount(0);
-            cbKtvSelect.removeAllItems();
-
-            String username = AuthService.getCurrentUser().getUsername();
-            String fullName = AuthService.getCurrentUser().getFullName();
-            String myShift = employeeRepository.getEmployeeShift(username, fullName);
-            String recEmpId = employeeRepository.getEmployeeIdByUsernameOrName(username, fullName);
-            
-            List<Object[]> ktvList = employeeRepository.findGroupKtvByReceptionist(recEmpId, myShift);
-            for (Object[] row : ktvList) {
-                groupKtvModel.addRow(row);
-                cbKtvSelect.addItem(row[1] + " - " + row[2]);
-            }
-
-            for (Object[] row : employeeRepository.findKtvAttendanceHistoryByReceptionist(recEmpId, myShift)) {
-                groupAttHistoryModel.addRow(row);
-            }
-
-            for (Object[] row : employeeRepository.findSelfAttendanceLogs(recEmpId, username)) {
-                selfAttHistoryModel.addRow(row);
-            }
-        };
+        attendanceSubTabs.addChangeListener(e -> loadGroupData());
 
         btnCheckinKtv.addActionListener(e -> {
-            String selected = (String) cbKtvSelect.getSelectedItem();
+            String selected = (String) cbReceptionistKtvSelect.getSelectedItem();
             if (selected == null || selected.isEmpty()) {
                 int row = ktvTable.getSelectedRow();
                 if (row != -1) {
-                    selected = groupKtvModel.getValueAt(row, 1) + " - " + groupKtvModel.getValueAt(row, 2);
+                    selected = receptionistGroupKtvModel.getValueAt(row, 1) + " - " + receptionistGroupKtvModel.getValueAt(row, 2);
                 }
             }
 
@@ -1032,7 +1104,7 @@ public class MainFrame extends JFrame {
                             "Người thực hiện: " + AuthService.getCurrentUser().getFullName() + "\n" +
                             "Ngày: " + dateStr + "\n" +
                             "Giờ: " + timeStr);
-                    loadGroupData.run();
+                    loadGroupData();
                 } else {
                     JOptionPane.showMessageDialog(this, "Không tìm thấy KTV!");
                 }
@@ -1044,8 +1116,53 @@ public class MainFrame extends JFrame {
         panel.add(topBar, BorderLayout.NORTH);
         panel.add(attendanceSubTabs, BorderLayout.CENTER);
 
-        loadGroupData.run();
+        loadGroupData();
         return panel;
+    }
+
+    private void loadGroupData() {
+        if (receptionistGroupKtvModel == null) return;
+        receptionistGroupKtvModel.setRowCount(0);
+        if (receptionistGroupAttHistoryModel != null) receptionistGroupAttHistoryModel.setRowCount(0);
+        if (receptionistSelfAttHistoryModel != null) receptionistSelfAttHistoryModel.setRowCount(0);
+
+        String prevSelected = cbReceptionistKtvSelect != null ? (String) cbReceptionistKtvSelect.getSelectedItem() : null;
+        String prevKtvId = prevSelected != null && prevSelected.contains(" - ") ? prevSelected.split(" - ")[0] : null;
+        if (cbReceptionistKtvSelect != null) cbReceptionistKtvSelect.removeAllItems();
+
+        String username = AuthService.getCurrentUser().getUsername();
+        String fullName = AuthService.getCurrentUser().getFullName();
+        String myShift = employeeRepository.getEmployeeShift(username, fullName);
+        String recEmpId = employeeRepository.getEmployeeIdByUsernameOrName(username, fullName);
+        
+        List<Object[]> ktvList = employeeRepository.findGroupKtvByReceptionist(recEmpId, myShift);
+        int selectedIndex = -1;
+        for (int i = 0; i < ktvList.size(); i++) {
+            Object[] row = ktvList.get(i);
+            receptionistGroupKtvModel.addRow(row);
+            if (cbReceptionistKtvSelect != null) {
+                String item = row[1] + " - " + row[2];
+                cbReceptionistKtvSelect.addItem(item);
+                if (prevKtvId != null && row[1].toString().equalsIgnoreCase(prevKtvId)) {
+                    selectedIndex = i;
+                }
+            }
+        }
+        if (cbReceptionistKtvSelect != null && selectedIndex >= 0) {
+            cbReceptionistKtvSelect.setSelectedIndex(selectedIndex);
+        }
+
+        if (receptionistGroupAttHistoryModel != null) {
+            for (Object[] row : employeeRepository.findKtvAttendanceHistoryByReceptionist(recEmpId, myShift)) {
+                receptionistGroupAttHistoryModel.addRow(row);
+            }
+        }
+
+        if (receptionistSelfAttHistoryModel != null) {
+            for (Object[] row : employeeRepository.findSelfAttendanceLogs(recEmpId, username)) {
+                receptionistSelfAttHistoryModel.addRow(row);
+            }
+        }
     }
 
     private void loadReportData() {
